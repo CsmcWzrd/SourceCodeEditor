@@ -36,6 +36,10 @@ public sealed partial class MainForm : Form
     };
     private readonly TextBox explorerAddress = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle };
     private readonly ContextMenuStrip explorerMenu = new();
+    // Lifetime-owned menus: never dispose in Closed/ItemClicked, because WinForms
+    // still uses the ContextMenuStrip after invoking menu-item handlers.
+    private readonly ContextMenuStrip documentContextMenu = new();
+    private readonly ContextMenuStrip shellContextMenu = new();
     private string explorerRoot = GetDocumentsDirectory();
     private readonly SplitContainer split = new()
     {
@@ -53,6 +57,9 @@ public sealed partial class MainForm : Form
     private int untitledCounter = 1;
     private bool ignoreTextChanged;
     private bool isClosing;
+    private bool bulkClosingDocuments;
+    private bool reopenClosedOnStartup = true;
+    private ToolStripMenuItem? reopenClosedOnStartupMenu;
     private bool autoIndent = true;
     private bool showLineNumbers = true;
     private bool defaultWordWrap;
@@ -153,6 +160,13 @@ public sealed partial class MainForm : Form
                 preferredLeftWidth = split.SplitterDistance;
         };
         FormClosing += OnMainFormClosing;
+        FormClosed += (_, _) =>
+        {
+            documentContextMenu.Dispose();
+            shellContextMenu.Dispose();
+            explorerMenu.Dispose();
+        };
+        sessionTimer.Interval = 3000; // frequent recovery checkpoints
         sessionTimer.Tick += (_, _) => PersistSession();
         diskTimer.Tick += (_, _) => CheckExternalChanges();
 
@@ -160,7 +174,7 @@ public sealed partial class MainForm : Form
         SetEditorFontSize(editorFontPoints, false);
         RestoreSession();
         foreach (string path in args.Where(File.Exists)) OpenPath(path);
-        if (!documents.Any(x => !x.Closed)) NewDocument();
+        EnsureAtLeastOneDocument();
         RefreshDocumentTrees();
         sessionTimer.Start(); diskTimer.Start();
         UpdateStatus();
@@ -201,6 +215,17 @@ public sealed partial class MainForm : Form
         AddMenu(file, "&Reload from Disk", Keys.None, ReloadCurrent);
         AddMenu(file, "Close &Tab", Keys.Control | Keys.W, CloseCurrent);
         AddMenu(file, "Close All", Keys.Control | Keys.Shift | Keys.W, CloseAll);
+        var startup = new ToolStripMenuItem("Startup Session");
+        reopenClosedOnStartupMenu = new ToolStripMenuItem("Reopen closed files at startup")
+        { Checked = true, CheckOnClick = true };
+        reopenClosedOnStartupMenu.CheckedChanged += (_, _) =>
+        {
+            reopenClosedOnStartup = reopenClosedOnStartupMenu.Checked;
+            PersistSession();
+        };
+        startup.DropDownItems.Add(reopenClosedOnStartupMenu);
+        AddMenu(startup, "Reopen all files in Closed Files now", Keys.None, ReopenAllClosedFiles);
+        file.DropDownItems.Add(startup);
         file.DropDownItems.Add(new ToolStripSeparator());
         AddMenu(file, "&Print...", Keys.Control | Keys.P, PrintCurrent);
         recentMenu = new ToolStripMenuItem("Recent Files");
@@ -336,6 +361,12 @@ public sealed partial class MainForm : Form
         var editor = CurrentDocument()?.View?.Editor;
         if (editor != null) action(editor);
     }
+    private void EnsureAtLeastOneDocument()
+    {
+        if (isClosing || bulkClosingDocuments || sessionLoading || IsDisposed || Disposing) return;
+        if (SessionRestorePolicy.NeedsUntitledDocument(documents)) NewDocument();
+    }
+
     private void NewDocument()
     {
         var d = new EditorDocument { Name = "Untitled " + untitledCounter++, WordWrap = defaultWordWrap };
@@ -624,23 +655,16 @@ public sealed partial class MainForm : Form
     {
         if (!d.Dirty) return true;
         if (d.Tab != null) editors.SelectedTab = d.Tab;
-        var result = MessageBox.Show(this, $"Save changes to '{d.Name}'?", "SourceCodeEditor",
-            MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        var result = MessageBox.Show(this,
+            $"Save changes to '{d.Name}'?\n\n" +
+            "Yes = save now.\nNo = retain unsaved text in Closed Files for recovery.\nCancel = keep this tab open.",
+            "SourceCodeEditor", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
         if (result == DialogResult.Cancel) return false;
         if (result == DialogResult.Yes) return SaveDocument(d, false);
-        // User selected "No": keep the on-disk version, not the discarded edits.
-        if (d.Path != null && DocumentSafety.Inspect(d.Path) == FileAvailability.Present)
-        {
-            try { LoadFromDisk(d); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
-            {
-                // The user explicitly chose Discard. Never let a deleted or
-                // unreadable disk file crash the tab-close / app-exit flow.
-                d.Dirty = false;
-                d.Buffer = string.Empty;
-            }
-        }
-        else { d.Dirty = false; d.Buffer = string.Empty; }
+        // "No" retains the dirty buffer in the Closed Files list and the
+        // persistent recovery session. No implicit discard or disk rewrite.
+        // Only explicit Remove from Closed Files permanently removes it.
+        d.Buffer = d.View?.Editor.Text ?? d.Buffer;
         return true;
     }
     private void CloseCurrent()
@@ -660,15 +684,40 @@ public sealed partial class MainForm : Form
         d.Tab = null; d.View = null;
         if (d.Path == null && string.IsNullOrEmpty(d.Buffer)) documents.Remove(d);
         else d.Closed = true;
-        RefreshDocumentTrees(); PersistSession(); UpdateStatus();
+        RefreshDocumentTrees();
+        EnsureAtLeastOneDocument();
+        PersistSession(); UpdateStatus();
         return true;
     }
     private void CloseAll()
     {
-        foreach (var d in documents.Where(x => !x.Closed).ToArray())
-            if (!CloseDocument(d)) return;
-        CloseAllShellTabs();
+        bulkClosingDocuments = true;
+        bool allClosed = true;
+        try
+        {
+            foreach (var d in documents.Where(x => !x.Closed).ToArray())
+            {
+                if (!CloseDocument(d)) { allClosed = false; break; }
+            }
+            if (allClosed) CloseAllShellTabs();
+        }
+        finally
+        {
+            bulkClosingDocuments = false;
+            EnsureAtLeastOneDocument();
+            PersistSession();
+        }
     }
+    private void ReopenAllClosedFiles()
+    {
+        // Activated entries are removed from Closed Files, retaining the
+        // original document instance, cached text, and original file metadata.
+        foreach (var doc in documents.Where(d => d.Closed).ToArray())
+            Activate(doc);
+        EnsureAtLeastOneDocument();
+        PersistSession();
+    }
+
     private void ReloadCurrent()
     {
         var d = CurrentDocument(); if (d?.Path == null) return;
@@ -703,7 +752,11 @@ public sealed partial class MainForm : Form
     }
     private void ShowDocumentContext(Control source, Point point, EditorDocument d)
     {
-        var menu = new ContextMenuStrip { Font = Font };
+        // Reuse a form-owned menu. Disposing it from its Closed event causes
+        // ObjectDisposedException inside ToolStripDropDown.OnItemClicked.
+        var menu = documentContextMenu;
+        menu.Font = Font;
+        menu.Items.Clear();
         menu.Items.Add("Open / Activate", null, (_, _) => Activate(d));
         if (!d.Closed)
         {
@@ -724,8 +777,6 @@ public sealed partial class MainForm : Form
         {
             documents.Remove(d); RefreshDocumentTrees(); PersistSession();
         });
-        // ContextMenuStrip must remain alive while displayed.
-        menu.Closed += (_, _) => menu.Dispose();
         menu.Show(source, point);
     }
     private void AddRecentFile(string path)

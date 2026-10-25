@@ -14,7 +14,17 @@ public sealed partial class MainForm
     private bool disableSessionWrites;
     private void PersistSession()
     {
-        if (sessionLoading || isClosing || IsDisposed || disableSessionWrites) return;
+        TryPersistSession(out _);
+    }
+
+    private bool TryPersistSession(out string? failure)
+    {
+        failure = null;
+        if (sessionLoading || isClosing || IsDisposed || disableSessionWrites)
+        {
+            failure = "Session writes are disabled or the editor is closing.";
+            return false;
+        }
         try
         {
             foreach (var doc in documents.Where(x => x.View != null))
@@ -32,13 +42,18 @@ public sealed partial class MainForm
                 LeftWidth = split.Panel1Collapsed ? 252 : split.SplitterDistance,
                 ApplicationFontPoints = applicationFontPoints,
                 EditorFontPoints = editorFontPoints,
-                RecentFiles = recentFiles.ToList()
+                RecentFiles = recentFiles.ToList(),
+                ReopenClosedOnStartup = reopenClosedOnStartup
             };
             SessionFileStore.Save(sessionPath, state);
+            return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Session recovery must never block normal editing or saving.
+            // Automatic backups never interrupt editing. App exit uses the
+            // returned failure to protect unsaved documents from silent loss.
+            failure = ex.Message;
+            return false;
         }
     }
     private void RestoreSession()
@@ -48,6 +63,9 @@ public sealed partial class MainForm
         try
         {
             EditorSession state = SessionFileStore.Load(sessionPath);
+            reopenClosedOnStartup = state.ReopenClosedOnStartup;
+            if (reopenClosedOnStartupMenu != null)
+                reopenClosedOnStartupMenu.Checked = reopenClosedOnStartup;
             // Do not restore the old explorer path: every launch starts in Documents.
             preferredLeftWidth = Math.Clamp(state.LeftWidth, 242, 320);
             SetApplicationFontSize(state.ApplicationFontPoints, false);
@@ -70,10 +88,11 @@ public sealed partial class MainForm
                 if (doc.Newline != "\r\n" && doc.Newline != "\n" && doc.Newline != "\r") doc.Newline = "\r\n";
                 if (!float.IsFinite(doc.Zoom)) doc.Zoom = 1f;
                 doc.Zoom = Math.Clamp(doc.Zoom, 0.5f, 4f);
+                bool reopen = SessionRestorePolicy.ShouldReopen(doc, reopenClosedOnStartup);
                 if (doc.Path != null)
                 {
                     FileAvailability availability = DocumentSafety.Inspect(doc.Path);
-                    if (availability == FileAvailability.Present && !doc.Dirty && !doc.Closed)
+                    if (availability == FileAvailability.Present && !doc.Dirty && reopen)
                     {
                         try { LoadFromDisk(doc); }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
@@ -84,15 +103,15 @@ public sealed partial class MainForm
                     }
                     else if (availability == FileAvailability.Missing)
                     {
-                        if (doc.Closed) doc.MissingOnDisk = true;
+                        if (!reopen) doc.MissingOnDisk = true;
                         else DocumentSafety.DetachToRecoveredBuffer(doc);
                     }
                     else if (availability != FileAvailability.Present)
                     {
-                        if (doc.Closed) doc.UnavailableOnDisk = true;
+                        if (!reopen) doc.UnavailableOnDisk = true;
                         else DocumentSafety.DetachToRecoveredBuffer(doc);
                     }
-                    else if (!doc.Closed && doc.Dirty &&
+                    else if (reopen && doc.Dirty &&
                              DocumentSafety.AssessSaveTarget(doc) == SaveTargetState.ModifiedExternally)
                     {
                         doc.ExternalConflict = true;
@@ -104,7 +123,13 @@ public sealed partial class MainForm
                 // allow two tabs to silently save over the same path.
                 DocumentSafety.DetachIfDuplicate(doc, documents);
                 documents.Add(doc);
-                if (!doc.Closed) Activate(doc);
+                if (reopen)
+                {
+                    // Restore performed the disk checks, so avoid a second
+                    // prompt/loading pass through PrepareClosedDocument.
+                    doc.Closed = false;
+                    Activate(doc);
+                }
                 if (doc.Name.StartsWith("Untitled ", StringComparison.Ordinal) &&
                     int.TryParse(doc.Name.Substring(9), out int number))
                     untitledCounter = Math.Max(untitledCounter, number + 1);
@@ -232,17 +257,24 @@ public sealed partial class MainForm
     {
         if (isClosing) return;
         sessionTimer.Stop(); diskTimer.Stop();
-        // Closing is cancelled if any Save As operation is cancelled.
-        foreach (var doc in documents.Where(x => !x.Closed && x.Dirty).ToArray())
+        // Exiting is not the same as explicitly closing/discarding a tab.
+        // Persist all dirty/untitled/closed buffers *before* any disposal.
+        // Session recovery is the default startup behavior.
+        if (!TryPersistSession(out string? failure))
         {
-            if (!ConfirmCanClose(doc))
+            var answer = MessageBox.Show(this,
+                "The editor could not save its recovery session.\n\n" + failure +
+                "\n\nExiting now can lose unsaved work.\n\n" +
+                "Yes = exit without a recovery snapshot.\nNo = cancel exit and continue editing.",
+                "Session backup failed", MessageBoxButtons.YesNo, MessageBoxIcon.Error,
+                MessageBoxDefaultButton.Button2);
+            if (answer != DialogResult.Yes)
             {
                 args.Cancel = true;
                 sessionTimer.Start(); diskTimer.Start();
                 return;
             }
         }
-        PersistSession();
         isClosing = true;
         CloseAllShellTabs();
     }

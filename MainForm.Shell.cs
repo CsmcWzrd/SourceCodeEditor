@@ -92,6 +92,7 @@ public sealed partial class MainForm
         if (tab.Tag is not EmbeddedShellControl) return;
         editors.TabPages.Remove(tab);
         tab.Dispose(); // Disposes the embedded shell and terminates cmd.exe.
+        EnsureAtLeastOneDocument();
         UpdateStatus();
     }
 
@@ -103,9 +104,10 @@ public sealed partial class MainForm
 
     private void ShowShellContext(Point point, TabPage tab)
     {
-        var menu = new ContextMenuStrip { Font = Font };
+        var menu = shellContextMenu;
+        menu.Font = Font;
+        menu.Items.Clear();
         menu.Items.Add("Close shell tab", null, (_, _) => CloseShellTab(tab));
-        menu.Closed += (_, _) => menu.Dispose();
         menu.Show(editors, point);
     }
 }

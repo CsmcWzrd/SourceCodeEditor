@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace SourceCodeEditor;
 
@@ -32,6 +33,7 @@ internal static class DocumentSafety
         catch (IOException) { return FileAvailability.Inaccessible; }
         catch (ArgumentException) { return FileAvailability.Inaccessible; }
         catch (NotSupportedException) { return FileAvailability.Inaccessible; }
+        catch (System.Security.SecurityException) { return FileAvailability.Inaccessible; }
     }
 
     public static string HashDiskFile(string path)
@@ -69,6 +71,9 @@ internal static class DocumentSafety
         }
         catch (IOException) { return SaveTargetState.Unavailable; }
         catch (UnauthorizedAccessException) { return SaveTargetState.Unavailable; }
+        catch (ArgumentException) { return SaveTargetState.Unavailable; }
+        catch (NotSupportedException) { return SaveTargetState.Unavailable; }
+        catch (System.Security.SecurityException) { return SaveTargetState.Unavailable; }
     }
 
     /// <summary>
@@ -81,7 +86,11 @@ internal static class DocumentSafety
         string oldPath = doc.Path;
         doc.RecoverySourcePath = oldPath;
         doc.Path = null;
-        doc.Name = Path.GetFileName(oldPath) + " (Recovered)";
+        string displayName;
+        try { displayName = Path.GetFileName(oldPath); }
+        catch (ArgumentException) { displayName = "Original file"; }
+        if (string.IsNullOrWhiteSpace(displayName)) displayName = "Original file";
+        doc.Name = displayName + " (Recovered)";
         doc.Dirty = true;
         doc.MissingOnDisk = false;
         doc.ExternalConflict = false;
@@ -159,8 +168,13 @@ internal static class SessionFileStore
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            File.WriteAllText(temporary, JsonSerializer.Serialize(state,
-                new JsonSerializerOptions { WriteIndented = true }));
+            string json = JsonSerializer.Serialize(state,
+                new JsonSerializerOptions { WriteIndented = true });
+            // The loader has the same limit. Never claim a recovery snapshot
+            // succeeded if the next launch would reject it as too large.
+            if (Encoding.UTF8.GetByteCount(json) > MaxSessionBytes)
+                throw new InvalidDataException("Recovery session exceeds 128 MiB. Save some documents to disk before exiting.");
+            File.WriteAllText(temporary, json, new UTF8Encoding(false));
             File.Move(temporary, path, true);
         }
         finally

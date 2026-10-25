@@ -53,6 +53,18 @@ internal sealed class EditorSession
     public float ApplicationFontPoints { get; set; } = 12f;
     public float EditorFontPoints { get; set; } = 12f;
     public List<string> RecentFiles { get; set; } = new();
+    // The user can disable automatically reopening closed documents while
+    // keeping their entries available in the Closed Files navigator.
+    public bool ReopenClosedOnStartup { get; set; } = true;
+}
+
+internal static class SessionRestorePolicy
+{
+    public static bool NeedsUntitledDocument(IEnumerable<EditorDocument> documents) =>
+        !documents.Any(document => !document.Closed);
+
+    public static bool ShouldReopen(EditorDocument document, bool reopenClosedOnStartup) =>
+        !document.Closed || reopenClosedOnStartup;
 }
 
 internal static class TextFiles

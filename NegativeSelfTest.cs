@@ -519,6 +519,121 @@ internal static class NegativeSelfTest
                 Require(again.Count == 20 && again[0].Closed && !again[1].Closed && again[19].Name == "19");
             });
 
+            // Startup and closed-file recovery invariants (new in v0.5.3).
+            Test("startup:zero-documents-requires-untitled", f =>
+                Require(SessionRestorePolicy.NeedsUntitledDocument(Array.Empty<EditorDocument>())));
+            Test("startup:all-closed-requires-untitled", f =>
+                Require(SessionRestorePolicy.NeedsUntitledDocument(new[]
+                { new EditorDocument { Closed = true, Path = "closed.cs" } })));
+            Test("startup:open-blank-does-not-duplicate", f =>
+                Require(!SessionRestorePolicy.NeedsUntitledDocument(new[]
+                { new EditorDocument { Name = "Untitled 1", Closed = false, Buffer = "" } })));
+            Test("startup:open-saved-does-not-duplicate", f =>
+                Require(!SessionRestorePolicy.NeedsUntitledDocument(new[]
+                { new EditorDocument { Closed = false, Path = "open.cs" } })));
+            Test("startup:dirty-open-buffer-does-not-duplicate", f =>
+                Require(!SessionRestorePolicy.NeedsUntitledDocument(new[]
+                { new EditorDocument { Closed = false, Dirty = true, Buffer = "not saved" } })));
+            Test("startup:open-plus-closed-no-extra-blank", f =>
+                Require(!SessionRestorePolicy.NeedsUntitledDocument(new[]
+                { new EditorDocument { Closed = true }, new EditorDocument { Closed = false } })));
+            Test("startup:reopen-closed-enabled", f =>
+                Require(SessionRestorePolicy.ShouldReopen(new EditorDocument { Closed = true }, true)));
+            Test("startup:reopen-closed-disabled", f =>
+                Require(!SessionRestorePolicy.ShouldReopen(new EditorDocument { Closed = true }, false)));
+            Test("startup:open-always-reopened", f =>
+                Require(SessionRestorePolicy.ShouldReopen(new EditorDocument { Closed = false }, false)));
+            Test("session:closed-reopen-preference-persists", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { ReopenClosedOnStartup = false });
+                Require(!SessionFileStore.Load(path).ReopenClosedOnStartup);
+            });
+            Test("session:closed-reopen-enabled-by-default", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession());
+                Require(SessionFileStore.Load(path).ReopenClosedOnStartup);
+            });
+            Test("session:old-format-defaults-to-reopen", f =>
+            {
+                string path = Write(f, "old-session.json", "{\"Documents\":[]}");
+                Require(SessionFileStore.Load(path).ReopenClosedOnStartup);
+            });
+            Test("session:dirty-open-buffer-restored-exactly", f =>
+            {
+                var d = new EditorDocument { Name = "Unsaved C#", Dirty = true,
+                    Buffer = "class A { }\n你好 🐱", Closed = false };
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { Documents = new() { d } });
+                var restored = SessionFileStore.Load(path).Documents.Single();
+                Require(restored.Dirty && !restored.Closed && restored.Path == null &&
+                    restored.Buffer == d.Buffer);
+            });
+            Test("session:dirty-closed-buffer-restored-exactly", f =>
+            {
+                var d = new EditorDocument { Name = "Closed unsaved", Dirty = true,
+                    Buffer = "not saved but retained", Closed = true };
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { Documents = new() { d } });
+                var restored = SessionFileStore.Load(path).Documents.Single();
+                Require(restored.Dirty && restored.Closed && restored.Buffer == d.Buffer);
+            });
+            Test("session:saved-closed-reopen-from-disk", f =>
+            {
+                string source = Write(f, "closed.cs", "saved contents");
+                var d = Snapshot(source); // Closed is true, as in the Closed Files tree.
+                var state = new EditorSession { Documents = new() { d } };
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, state);
+                var restored = SessionFileStore.Load(path).Documents.Single();
+                Require(restored.Closed && SessionRestorePolicy.ShouldReopen(restored, true));
+                Require(DocumentSafety.Inspect(restored.Path) == FileAvailability.Present);
+            });
+            Test("session:saved-closed-missing-source-recovered", f =>
+            {
+                string source = Write(f, "closed.cs", "saved contents");
+                var d = Snapshot(source); d.Buffer = "precious cached text";
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { Documents = new() { d } });
+                File.Delete(source);
+                var restored = SessionFileStore.Load(path).Documents.Single();
+                if (SessionRestorePolicy.ShouldReopen(restored, true) &&
+                    DocumentSafety.Inspect(restored.Path) == FileAvailability.Missing)
+                    DocumentSafety.DetachToRecoveredBuffer(restored);
+                Require(restored.Path == null && restored.Dirty &&
+                    restored.Buffer == "precious cached text" && !File.Exists(source));
+            });
+            Test("session:empty-untitled-persists-as-untitled", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { Documents = new()
+                { new EditorDocument { Name = "Untitled 1", Buffer = "", Closed = false } } });
+                var docs = SessionFileStore.Load(path).Documents;
+                Require(!SessionRestorePolicy.NeedsUntitledDocument(docs) &&
+                    docs[0].Name == "Untitled 1" && docs[0].Buffer == "");
+            });
+            Test("recovery:invalid-source-path-does-not-crash", f =>
+            {
+                var d = new EditorDocument { Path = "invalid\0path", Buffer = "keep this", Dirty = true };
+                DocumentSafety.DetachToRecoveredBuffer(d);
+                Require(d.Path == null && d.Dirty && d.Buffer == "keep this" &&
+                    d.RecoverySourcePath == "invalid\0path");
+            });
+            Test("session:dirty-and-clean-mixed-persist", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                SessionFileStore.Save(path, new EditorSession { Documents = new()
+                {
+                    new EditorDocument { Closed = false, Dirty = true, Buffer = "unsaved" },
+                    new EditorDocument { Closed = true, Dirty = false, Buffer = "saved" },
+                    new EditorDocument { Closed = true, Dirty = true, Buffer = "closed dirty" }
+                } });
+                var docs = SessionFileStore.Load(path).Documents;
+                Require(docs.Count == 3 && docs[0].Dirty && !docs[1].Dirty && docs[2].Dirty &&
+                    docs[2].Closed && docs[2].Buffer == "closed dirty");
+            });
+
             // Explorer filtering: files must be readable text, even with source extension.
             Test("explorer:source-code-visible", f => Require(TextSourceFileFilter.IsTextOrSource(Write(f, "code.cs", "class X {}"))));
             Test("explorer:plain-text-visible", f => Require(TextSourceFileFilter.IsTextOrSource(Write(f, "notes.txt", "hello"))));

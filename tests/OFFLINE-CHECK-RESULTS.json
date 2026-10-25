@@ -1,9 +1,9 @@
 {
   "kind": "structural-and-filesystem-fixture (not compiled C#)",
-  "total": 65,
-  "passed": 65,
+  "total": 79,
+  "passed": 79,
   "failed": 0,
-  "distinct_headless_negative_tests_in_CSharp": 91,
+  "distinct_headless_negative_tests_in_CSharp": 110,
   "results": [
     {
       "name": "single-solution",
@@ -19,6 +19,10 @@
     },
     {
       "name": "source-exists:Program.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:AppDiagnostics.cs",
       "status": "PASS"
     },
     {
@@ -162,11 +166,59 @@
       "status": "PASS"
     },
     {
+      "name": "v053-version",
+      "status": "PASS"
+    },
+    {
+      "name": "persist-unsaved-on-exit",
+      "status": "PASS"
+    },
+    {
+      "name": "exit-does-not-discard-unsaved",
+      "status": "PASS"
+    },
+    {
+      "name": "reopen-closed-option",
+      "status": "PASS"
+    },
+    {
+      "name": "startup-closed-session-preference",
+      "status": "PASS"
+    },
+    {
+      "name": "always-blank-editor",
+      "status": "PASS"
+    },
+    {
+      "name": "no-contextmenu-dispose-in-closed-event",
+      "status": "PASS"
+    },
+    {
+      "name": "UI-error-logging-present",
+      "status": "PASS"
+    },
+    {
+      "name": "editor-regular-default",
+      "status": "PASS"
+    },
+    {
+      "name": "insertion-point-normalized",
+      "status": "PASS"
+    },
+    {
+      "name": "normal-font-on-document-load",
+      "status": "PASS"
+    },
+    {
       "name": "installer-present",
       "status": "PASS"
     },
     {
       "name": "Windows-PowerShell-test-harness",
+      "status": "PASS"
+    },
+    {
+      "name": "at-least-100-negative-scenarios",
       "status": "PASS"
     },
     {
@@ -179,6 +231,10 @@
     },
     {
       "name": "balanced-delimiters:MainForm.Session.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:AppDiagnostics.cs",
       "status": "PASS"
     },
     {

@@ -1,4 +1,4 @@
-# SourceCodeEditor 0.5.2 — Windows x64 smoke-test checklist
+# SourceCodeEditor 0.5.3 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
 for Visual Studio 2022 / Windows 10 or Windows 11 x64.
@@ -122,3 +122,37 @@ folder (must not recreate the removed directory). Repeat with an empty file,
 missing drive, moved file, file replaced by directory, an exclusive-lock file,
 changes with identical size/timestamps, malformed session JSON, and multiple
 simultaneous shells. Run `negative-smoke.ps1` before each installer build.
+
+## New in 0.5.3 — WinForms UI and session regression cases
+
+- [ ] [Font] Start a blank editor: `Editor.Font.Style == FontStyle.Regular`
+  and `SelectionFont.Style == FontStyle.Regular`, 12 pt. Type text, open a
+  source file, syntax-highlight, increase/decrease font, reload, verify normal.
+- [ ] [ContextMenuStrip] From Opened/Closed/Unsaved tree, right-click Close,
+  Open/Activate, Close other tabs, and Remove. No ObjectDisposedException
+  from `ToolStripDropDown.OnItemClicked`.
+- [ ] [ContextMenuStrip] Right-click embedded CMD tab, close it. No disposed
+  ContextMenuStrip or additional CMD window.
+- [ ] [Zero-doc] Close sole file tab. A fresh empty unsaved Untitled tab opens.
+  File -> Close All has the same guarantee; no infinite close loop.
+- [ ] [Exit/restart] Type unsaved content in blank Untitled, exit using X,
+  reopen SourceCodeEditor: text, dirty marker, caret, and tab recovered.
+- [ ] [Exit/restart] Modify already-saved code file, exit without saving,
+  restart. Content is recovered but the original disk file is NOT overwritten.
+- [ ] [Close/reopen] Close a dirty tab, select No (retain for recovery), exit,
+  restart. It appears reopened automatically (default setting).
+- [ ] [Save/close/reopen] Close a clean saved file, exit, restart: it reopens.
+  Repeat with startup option disabled: entry stays in Closed Files list.
+- [ ] [Missing file] Close a saved file, remove/move parent folder, restart:
+  cached text is in an unsaved recovered tab and original folder stays gone.
+- [ ] [Duplicate protection] Corrupted session listing same path twice does
+  not give two write-capable editor tabs for the same source path.
+- [ ] [Session error] Simulate denied session write in isolated test account;
+  exiting with unsaved data displays warning and defaults to cancel exit.
+- [ ] [Shell-only] With CMD tabs open, close last document: a blank editor
+  tab exists in addition to the shell. Close shell: blank editor still exists.
+- [ ] [Crash diagnostics] A triggered unexpected WinForms exception records
+  `%LOCALAPPDATA%\SourceCodeEditor\errors.log` without recursive failures.
+
+This checklist requires interactive Windows execution; the Linux authoring
+environment does not execute the GUI or ConPTY.

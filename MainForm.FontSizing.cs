@@ -40,6 +40,8 @@ public sealed partial class MainForm
             editors.Padding = new Point(Math.Max(20, uiFont.Height + 2), Math.Max(7, uiFont.Height / 4));
             if (MainMenuStrip != null) MainMenuStrip.Font = uiFont;
             explorerMenu.Font = uiFont;
+            documentContextMenu.Font = uiFont;
+            shellContextMenu.Font = uiFont;
             if (explorerToolbar != null) explorerToolbar.Font = uiFont;
             explorerAddress.Font = uiFont;
             foreach (TreeView tree in new[] { explorer, opened, closed, unsaved })

@@ -95,7 +95,9 @@ public sealed class LineNumberedRichTextBox : UserControl
     {
         if (IsDisposed || Editor.IsDisposed) return;
         points = Math.Clamp(points, 8f, 32f);
-        if (Math.Abs(Editor.Font.SizeInPoints - points) < 0.01f) return;
+        // Even when the size is unchanged, normalize the RTF run formatting.
+        // Imported/highlighted runs can otherwise inherit bold from an earlier
+        // selection or from the WinForms RichEdit formatting cache.
         int start = Editor.SelectionStart;
         int length = Editor.SelectionLength;
         float zoom = Editor.ZoomFactor;
@@ -109,6 +111,8 @@ public sealed class LineNumberedRichTextBox : UserControl
                 Editor.Select(Math.Min(start, Editor.TextLength),
                     Math.Min(length, Math.Max(0, Editor.TextLength - start)));
             }
+            // Ensure the insertion point also uses Regular, including empty text.
+            if (length == 0) Editor.SelectionFont = Editor.Font;
             // Changing RichEdit font must not reset the per-document zoom.
             if (Math.Abs(Editor.ZoomFactor - zoom) > 0.001f)
                 Editor.ZoomFactor = zoom;
@@ -122,7 +126,10 @@ public sealed class LineNumberedRichTextBox : UserControl
         using (new RedrawScope(Editor))
         {
             Editor.Text = text;
+            Editor.SelectAll();
+            Editor.SelectionFont = Editor.Font;
             Editor.Select(0, 0);
+            Editor.SelectionFont = Editor.Font;
         }
         ApplySyntaxHighlighting();
         QueueGutterRefresh();

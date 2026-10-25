@@ -118,3 +118,17 @@ Passing source checks or the headless suite is **not** proof that the GUI and in
 - Normal session snapshots are periodic (10 seconds). Forced termination or power loss before the next snapshot can lose the most recent keystrokes.
 - Very large files, offline network drives, huge directory listings and complex terminal applications are not fully qualified. Text files are currently read in full into memory.
 - Windows GUI, terminal rendering and installer functionality **have not been executed here**; CI/self-tests must be run on Windows before shipping the application as production-ready.
+
+## v0.5.3: new startup and UI safety cases
+
+The native headless suite adds 19 cases for zero-document startup,
+no-duplicate blank documents, opened/closed document distinctions, reopening
+closed files (on/off), session preference JSON backward compatibility, exact
+UTF-8/Unicode unsaved-buffer restoration, clean/dirty closed-file restoration,
+missing closed-file recovery, and mixed-state session persistence. These
+cases exercise the real C# session and filesystem model on Windows.
+
+Interactive Windows-only tests additionally cover the toolbar/context-menu
+`ObjectDisposedException`, 12 pt Regular RTF font, main-window exit recovery
+without Save prompts, shell-tab closure, and blocked session writes. See
+`SMOKE-TESTS.md` for step-by-step acceptance criteria.

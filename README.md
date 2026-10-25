@@ -1,4 +1,4 @@
-# SourceCodeEditor v0.5.2 — Windows x64
+# SourceCodeEditor v0.5.3 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -9,6 +9,56 @@ root and retains RTF-backed syntax coloring.
 One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
+
+## New in 0.5.3: startup recovery, 12 pt regular font and UI exception fix
+
+The source continues to use the original CSharpCodeDetective-derived WinForms
+RTF/RichTextBox editor, and there is still **one solution and one project**.
+
+- **Regular font:** The editor starts at **Consolas 12 pt, Regular**; its
+  RichEdit text runs and empty-document insertion format are normalized to
+  Regular. Syntax highlighting continues to use colored RTF runs, and View's
+  editor-font setting remains separate from application UI fonts.
+- **Always one editor document:** When the last editor document closes, an
+  empty `Untitled N` tab is automatically created. This also holds after
+  `Close All`, after startup with no restorable documents, and after closing
+  a shell when there are no source documents. It is not saved to disk until
+  the user chooses Save/Save As.
+- **Reopen on startup:** `session.json` stores open saved documents, unsaved
+  untitled and modified documents, dirty closed documents, clean closed
+  documents, tab ordering/caret/zoom, recent files, encoding and EOL. On
+  normal application exit, unsaved text is checkpointed **without prompting
+  for Save or discarding the editor buffer**. Auto-snapshots occur every
+  three seconds while the application is running. After an abnormal OS/process
+  termination, edits made after the latest snapshot may be missing.
+- **Closed-file startup preference:** `File -> Startup Session -> Reopen closed
+  files at startup` is **enabled by default**. Disabling it retains saved
+  closed entries in the Closed Files navigator, where they can be opened
+  individually. `Reopen all files in Closed Files now` is also available.
+- **Explicitly closing a dirty document:** `Yes` saves now; `No` retains
+  unsaved text in Closed Files for recovery; `Cancel` leaves the tab open.
+  `Remove from Closed Files` removes the retained entry. Exit itself no
+  longer discards text. Changes to existing files are not auto-written to disk.
+- **Deleted/renamed originals:** missing or inaccessible files are recovered
+  from session snapshots into unsaved tabs requiring Save As. Existing disk
+  conflict detection is still enforced.
+- **Context-menu fix:** Removed disposal of newly created `ContextMenuStrip`
+  objects from the `Closed` callback (the precise failure in the uploaded
+  exception log). The two dynamic menus are owned by the main form and
+  disposed after its lifetime, not while WinForms processes clicks.
+- **Unexpected errors:** An exception log is kept locally at
+  `%LOCALAPPDATA%\SourceCodeEditor\errors.log`. UI errors are reported with
+  an actionable message; fatal background failures remain fatal and are logged.
+  No telemetry is sent by this logging mechanism.
+- **Safeguarded exit:** If the session backup cannot be written, exit warns
+  and offers to *cancel* (default) to avoid unintentionally losing buffers.
+
+The Windows native test runner gains 19 additional session/restore scenarios.
+
+**Validation:** Offline structural/filesystem checks are executed from
+`tests/offline_source_checks.py`. Native .NET and WinForms/ConPTY checks require
+Windows; this source package does not claim to include a compiled installer or
+successful Windows runtime qualification.
 
 ## New in 0.5.2: negative-testing and data-loss safeguards
 
