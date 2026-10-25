@@ -1,5 +1,5 @@
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -7,8 +7,39 @@ using System.Windows.Forms;
 
 namespace SourceCodeEditor;
 
+// Windows Explorer is deliberately NOT embedded or launched here. The tree is an
+// ordinary WinForms TreeView populated from System.IO, with one node per drive.
 public sealed partial class MainForm
 {
+    private sealed class ExplorerItem
+    {
+        public string Path { get; }
+        public bool IsFolder { get; }
+        public bool Loaded { get; set; }
+        public ExplorerItem(string path, bool isFolder)
+        {
+            Path = path;
+            IsFolder = isFolder;
+        }
+    }
+
+    private static string GetUserHome()
+    {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Directory.Exists(home) ? home : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
+    private static string GetDocumentsDirectory()
+    {
+        // Prefer the literal Documents folder in the user's home, as requested.
+        // Fall back to the user's configured Documents known folder if it has
+        // been redirected to another disk or OneDrive.
+        string homeDocs = Path.Combine(GetUserHome(), "Documents");
+        if (Directory.Exists(homeDocs)) return homeDocs;
+        string configured = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return Directory.Exists(configured) ? configured : GetUserHome();
+    }
+
     private TabPage BuildExplorerPage()
     {
         var page = new TabPage("File Explorer") { Padding = Padding.Empty };
@@ -19,169 +50,261 @@ public sealed partial class MainForm
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var toolbar = new ToolStrip
         {
             Dock = DockStyle.Fill, GripStyle = ToolStripGripStyle.Hidden,
-            RenderMode = ToolStripRenderMode.System, AutoSize = false,
+            AutoSize = false, RenderMode = ToolStripRenderMode.System,
             Padding = Padding.Empty
         };
-        var browse = new ToolStripButton("Browse…") { ToolTipText = "Choose a folder to browse" };
-        browse.Click += (_, _) => ChooseExplorerFolder();
-        var refresh = new ToolStripButton("Refresh") { ToolTipText = "Refresh current folder" };
-        refresh.Click += (_, _) => NavigateExplorer(explorerRoot);
-        toolbar.Items.AddRange(new ToolStripItem[] { browse, refresh });
-        explorerAddress.Text = explorerRoot;
-        explorerAddress.Margin = new Padding(2, 1, 2, 2);
+        var documentsButton = new ToolStripButton("Documents") { ToolTipText = "Go to your Documents folder" };
+        documentsButton.Click += (_, _) => NavigateExplorer(GetDocumentsDirectory());
+        var drivesButton = new ToolStripButton("Drives") { ToolTipText = "Show all available Windows drives" };
+        drivesButton.Click += (_, _) =>
+        {
+            RefreshDriveTree();
+            explorerAddress.Text = GetDocumentsDirectory();
+        };
+        var refreshButton = new ToolStripButton("Refresh") { ToolTipText = "Refresh drives and selected folder" };
+        refreshButton.Click += (_, _) => RefreshExplorer();
+        toolbar.Items.AddRange(new ToolStripItem[] { documentsButton, drivesButton, refreshButton });
+
+        explorerAddress.Text = GetDocumentsDirectory();
+        explorerAddress.Margin = new Padding(2, 1, 2, 1);
         explorerAddress.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Enter)
-            {
-                e.SuppressKeyPress = true;
-                NavigateExplorer(explorerAddress.Text);
-            }
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            NavigateExplorer(explorerAddress.Text);
         };
-        layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(explorerAddress, 0, 1);
-        layout.Controls.Add(explorer, 0, 2);
-        page.Controls.Add(layout);
-
-        explorerMenu.Items.Add("Open", null, (_, _) => OpenExplorerSelected());
-        explorerMenu.Items.Add("Open shell here (cmd.exe)", null, (_, _) => OpenShell(GetExplorerSelectedPath()));
-        explorerMenu.Items.Add("Open PowerShell here", null, (_, _) => OpenShell(GetExplorerSelectedPath(), true));
-        explorerMenu.Items.Add(new ToolStripSeparator());
-        explorerMenu.Items.Add("Set folder as explorer root", null, (_, _) =>
-        {
-            string? selected = GetExplorerSelectedPath();
-            if (selected != null)
-                NavigateExplorer(Directory.Exists(selected) ? selected : Path.GetDirectoryName(selected) ?? explorerRoot);
-        });
-        explorerMenu.Items.Add("Go to parent folder", null, (_, _) =>
-            NavigateExplorer(Directory.GetParent(explorerRoot)?.FullName ?? explorerRoot));
-        explorer.ContextMenuStrip = explorerMenu;
+        explorer.ShowPlusMinus = true;
+        explorer.ShowRootLines = true;
+        explorer.HideSelection = false;
         explorer.NodeMouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Right) explorer.SelectedNode = e.Node;
         };
-        explorer.NodeMouseDoubleClick += (_, e) =>
+        explorer.AfterSelect += (_, e) =>
         {
-            if (e.Node.Tag is not string path) return;
-            if (File.Exists(path)) OpenPath(path);
-            else if (Directory.Exists(path) && !e.Node.IsExpanded) e.Node.Expand();
+            if (e.Node.Tag is not ExplorerItem item) return;
+            explorerRoot = item.IsFolder ? item.Path : Path.GetDirectoryName(item.Path) ?? GetDocumentsDirectory();
+            explorerAddress.Text = explorerRoot;
         };
         explorer.BeforeExpand += (_, e) =>
         {
-            if (e.Node.Tag is string path && Directory.Exists(path)) PopulateExplorerNode(e.Node, path);
+            if (e.Node.Tag is ExplorerItem { IsFolder: true, Loaded: false })
+                PopulateExplorerNode(e.Node);
         };
-        NavigateExplorer(explorerRoot);
+        explorer.NodeMouseDoubleClick += (_, e) =>
+        {
+            if (e.Node.Tag is not ExplorerItem item) return;
+            if (item.IsFolder) e.Node.Expand();
+            else OpenPath(item.Path);
+        };
+
+        explorerMenu.Items.Add("Open", null, (_, _) => OpenExplorerSelected());
+        explorerMenu.Items.Add("Open shell here (embedded tab)", null, (_, _) => OpenEmbeddedShell(GetExplorerSelectedFolder()));
+        explorerMenu.Items.Add("Copy path", null, (_, _) =>
+        {
+            string? selected = GetExplorerSelectedPath();
+            if (selected != null) Clipboard.SetText(selected);
+        });
+        explorerMenu.Items.Add(new ToolStripSeparator());
+        explorerMenu.Items.Add("Go to Documents", null, (_, _) => NavigateExplorer(GetDocumentsDirectory()));
+        explorerMenu.Items.Add("Go to parent folder", null, (_, _) =>
+        {
+            string current = GetExplorerSelectedFolder();
+            NavigateExplorer(Directory.GetParent(current)?.FullName ?? current);
+        });
+        explorer.ContextMenuStrip = explorerMenu;
+
+        layout.Controls.Add(toolbar, 0, 0);
+        layout.Controls.Add(explorerAddress, 0, 1);
+        layout.Controls.Add(explorer, 0, 2);
+        page.Controls.Add(layout);
+        RefreshDriveTree();
         return page;
     }
 
+    // Folder navigation uses the address bar, not the Windows FolderBrowserDialog.
     private void ChooseExplorerFolder()
     {
-        using var picker = new FolderBrowserDialog
-        {
-            Description = "Select the folder to show in File Explorer",
-            SelectedPath = Directory.Exists(explorerRoot) ? explorerRoot : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ShowNewFolderButton = true
-        };
-        if (picker.ShowDialog(this) == DialogResult.OK) NavigateExplorer(picker.SelectedPath);
+        navigation.SelectedIndex = 0;
+        explorerAddress.Focus();
+        explorerAddress.SelectAll();
     }
+
+    private void RefreshExplorer()
+    {
+        string requested = explorer.SelectedNode?.Tag is ExplorerItem item && item.IsFolder
+            ? item.Path : explorerRoot;
+        RefreshDriveTree();
+        NavigateExplorer(Directory.Exists(requested) ? requested : GetDocumentsDirectory());
+    }
+
+    private void RefreshDriveTree()
+    {
+        explorer.BeginUpdate();
+        try
+        {
+            explorer.Nodes.Clear();
+            foreach (var drive in DriveInfo.GetDrives().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                string label = drive.Name;
+                try
+                {
+                    if (drive.IsReady && !string.IsNullOrWhiteSpace(drive.VolumeLabel))
+                        label += " (" + drive.VolumeLabel + ")";
+                }
+                catch (IOException) { }
+                var node = MakeExplorerNode(drive.Name, true, label);
+                explorer.Nodes.Add(node);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, ex.Message, "Reading drives", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { explorer.EndUpdate(); }
+    }
+
+    private static TreeNode MakeExplorerNode(string path, bool isFolder, string? caption = null)
+    {
+        var name = caption ?? Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+        var node = new TreeNode(string.IsNullOrEmpty(name) ? path : name)
+        {
+            Tag = new ExplorerItem(path, isFolder),
+            ToolTipText = path,
+            ForeColor = isFolder ? Color.FromArgb(40, 73, 118) : SystemColors.WindowText
+        };
+        // Dummy node delays enumeration until a directory is actually expanded.
+        if (isFolder) node.Nodes.Add(new TreeNode("Loading..."));
+        return node;
+    }
+
+    private void PopulateExplorerNode(TreeNode node)
+    {
+        if (node.Tag is not ExplorerItem { IsFolder: true } folder || folder.Loaded) return;
+        folder.Loaded = true;
+        node.Nodes.Clear();
+        try
+        {
+            var options = new EnumerationOptions
+            {
+                AttributesToSkip = 0, // Hidden and System entries MUST be visible.
+                IgnoreInaccessible = true, RecurseSubdirectories = false,
+                ReturnSpecialDirectories = false
+            };
+            var entries = new DirectoryInfo(folder.Path).EnumerateFileSystemInfos("*", options).ToArray();
+            foreach (var info in entries.Where(f => IsDirectoryEntry(f))
+                     .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+                node.Nodes.Add(MakeExplorerNode(info.FullName, true));
+            foreach (var info in entries.Where(f => !IsDirectoryEntry(f) && TextSourceFileFilter.IsTextOrSource(f.FullName))
+                     .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
+                node.Nodes.Add(MakeExplorerNode(info.FullName, false));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            node.Nodes.Add(new TreeNode("[Unable to read folder]") { ToolTipText = ex.Message });
+        }
+    }
+
+    private static bool IsDirectoryEntry(FileSystemInfo entry)
+    {
+        try { return (entry.Attributes & FileAttributes.Directory) != 0; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    // Navigates the drive-rooted tree to a path; all drive roots remain visible.
+    // At startup this is called with the user's Documents path, regardless of
+    // the directory saved in an earlier session.
     private void NavigateExplorer(string path)
     {
         try
         {
             string full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')));
-            if (!Directory.Exists(full))
+            bool isFile = File.Exists(full);
+            string folder = isFile ? Path.GetDirectoryName(full)! : full;
+            if (!Directory.Exists(folder))
             {
-                MessageBox.Show(this, "Folder does not exist: " + full, "File Explorer");
+                MessageBox.Show(this, "Folder does not exist: " + folder, "File Explorer");
                 explorerAddress.Text = explorerRoot;
                 return;
             }
-            explorerRoot = full;
-            explorerAddress.Text = full;
-            explorer.BeginUpdate();
-            try
+            if (explorer.Nodes.Count == 0) RefreshDriveTree();
+            string? driveRoot = Path.GetPathRoot(folder);
+            var drive = explorer.Nodes.Cast<TreeNode>().FirstOrDefault(n =>
+                n.Tag is ExplorerItem item && string.Equals(
+                    Path.TrimEndingDirectorySeparator(item.Path),
+                    Path.TrimEndingDirectorySeparator(driveRoot ?? ""), StringComparison.OrdinalIgnoreCase));
+            if (drive == null)
             {
-                explorer.Nodes.Clear();
-                var root = ExplorerNode(full, true);
-                explorer.Nodes.Add(root);
-                PopulateExplorerNode(root, full);
-                root.Expand();
+                MessageBox.Show(this, "Drive not available in the explorer: " + driveRoot, "File Explorer");
+                return;
             }
-            finally { explorer.EndUpdate(); }
+            TreeNode current = drive;
+            string relative = Path.GetRelativePath(driveRoot!, folder);
+            var parts = relative == "." ? Array.Empty<string>() :
+                relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string part in parts)
+            {
+                PopulateExplorerNode(current);
+                current.Expand();
+                var next = current.Nodes.Cast<TreeNode>().FirstOrDefault(n =>
+                    n.Tag is ExplorerItem entry && entry.IsFolder &&
+                    string.Equals(n.Text, part, StringComparison.OrdinalIgnoreCase));
+                if (next == null) break; // A protected folder can be inaccessible.
+                current = next;
+            }
+            if (isFile)
+            {
+                PopulateExplorerNode(current);
+                current.Expand();
+                var match = current.Nodes.Cast<TreeNode>().FirstOrDefault(n =>
+                    n.Tag is ExplorerItem entry && !entry.IsFolder &&
+                    string.Equals(entry.Path, full, StringComparison.OrdinalIgnoreCase));
+                if (match != null) current = match;
+            }
+            explorer.SelectedNode = current;
+            current.EnsureVisible();
+            explorerRoot = folder;
+            explorerAddress.Text = folder;
+            navigation.SelectedIndex = 0;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            MessageBox.Show(this, ex.Message, "File Explorer");
+            MessageBox.Show(this, ex.Message, "File Explorer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
-    private static TreeNode ExplorerNode(string full, bool isFolder)
+
+    private string? GetExplorerSelectedPath() => (explorer.SelectedNode?.Tag as ExplorerItem)?.Path;
+
+    private string GetExplorerSelectedFolder()
     {
-        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(full));
-        var node = new TreeNode(string.IsNullOrWhiteSpace(name) ? full : name)
-        {
-            Tag = full, ToolTipText = full,
-            ForeColor = isFolder ? Color.FromArgb(33, 76, 135) : SystemColors.WindowText
-        };
-        if (isFolder) node.Nodes.Add(new TreeNode("Loading..."));
-        return node;
+        var item = explorer.SelectedNode?.Tag as ExplorerItem;
+        string candidate = item == null ? explorerRoot :
+            item.IsFolder ? item.Path : Path.GetDirectoryName(item.Path) ?? explorerRoot;
+        return Directory.Exists(candidate) ? candidate : GetDocumentsDirectory();
     }
-    private void PopulateExplorerNode(TreeNode parent, string folder)
-    {
-        parent.Nodes.Clear();
-        try
-        {
-            foreach (var dir in Directory.EnumerateDirectories(folder).OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
-                parent.Nodes.Add(ExplorerNode(dir, true));
-            foreach (var file in Directory.EnumerateFiles(folder).OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
-                parent.Nodes.Add(ExplorerNode(file, false));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            parent.Nodes.Add(new TreeNode("[Folder unavailable]") { ToolTipText = ex.Message });
-        }
-    }
-    private string? GetExplorerSelectedPath() => explorer.SelectedNode?.Tag as string;
+
     private void OpenExplorerSelected()
     {
-        string? selected = GetExplorerSelectedPath();
-        if (selected == null) return;
-        if (File.Exists(selected)) OpenPath(selected);
-        else if (Directory.Exists(selected)) NavigateExplorer(selected);
+        if (explorer.SelectedNode?.Tag is not ExplorerItem item) return;
+        if (item.IsFolder) NavigateExplorer(item.Path);
+        else OpenPath(item.Path);
     }
-    private void OpenShell(string? requestedPath, bool powershell = false)
-    {
-        string folder = requestedPath == null ? explorerRoot :
-            Directory.Exists(requestedPath) ? requestedPath : Path.GetDirectoryName(requestedPath) ?? explorerRoot;
-        if (!Directory.Exists(folder)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(powershell ? "powershell.exe" : "cmd.exe")
-            {
-                WorkingDirectory = folder, UseShellExecute = true
-            });
-        }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Open shell failed"); }
-    }
+
     private void OpenFileLocation()
     {
-        var path = CurrentDocument()?.Path;
-        if (path == null) return;
-        ShowFileInExplorer(path);
+        string? file = CurrentDocument()?.Path;
+        if (file != null) ShowFileInExplorer(file);
     }
+
     private void ShowFileInExplorer(string? path)
     {
-        if (string.IsNullOrEmpty(path)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo("explorer.exe")
-            {
-                Arguments = "/select,\"" + path.Replace("\"", "", StringComparison.Ordinal) + "\"",
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Explorer failed"); }
+        // Locate in OUR explorer instead of starting Windows explorer.exe.
+        if (!string.IsNullOrWhiteSpace(path)) NavigateExplorer(path);
     }
 }

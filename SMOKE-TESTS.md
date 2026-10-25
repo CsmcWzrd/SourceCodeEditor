@@ -1,19 +1,54 @@
-# Manual smoke test checklist (Windows x64)
+# SourceCodeEditor 0.4.0 — Windows x64 smoke-test checklist
 
-Build or run an installer produced by the provided build script / Windows CI.
+**Not yet executed** in a Windows test environment. These checks are intended
+for Visual Studio 2022 / Windows 10 or Windows 11 x64.
 
-1. Launch the application. Confirm **File Explorer | Opened Files | Closed Files | Unsaved Files** all display in the LEFT navigator. Click each tab, confirm only one level in the three document lists.
-2. Ensure explorer tree starts below tabs and below compact Browse/Refresh toolbar. No large Up/Shell buttons.
-3. Open two `.cs` files. Confirm TWO distinct, clickable editor tabs on the RIGHT, with visible × close affordances.
-4. Double-click a file in Opened Files; verify its tab activates. Close it; verify it appears under Closed Files. Double-click Closed Files; verify reopen.
-5. Create new document, type unsaved text, confirm under Unsaved Files. Save As; ensure it disappears from Unsaved Files. Modify; confirm it reappears.
-6. Open a 10,000-line file. Use Ctrl+mouse-wheel up/down. Confirm left line numbers change size and remain aligned with code text. Test 50%, 100%, 250%, 400% zoom and Ctrl+0 reset via menu.
-7. Expand explorer directory tree; right-click a file or folder, choose `Open shell here`; verify cmd.exe's working directory. No permanent Shell toolbar button.
-8. Open a Python file with `#` comments, a C# file with `//` comments and string with URL, SQL, and CMotive files. Verify basic syntax colors.
-9. Search > Find, Replace, Find All with case, whole-word, regex and backward. Find in Files with masks and recursion. Double-click results.
-10. Change EOL to LF and encoding to UTF-8 BOM. Save and reopen; verify EOL/BOM. Test UTF-16 LE/BE and UTF-32 LE/BE round trips with non-ASCII characters.
-11. Modify a file externally (Notepad). Verify change detection prompts within ~5 seconds and editor reloads when accepted.
-12. Create dirty and untitled buffers; keep the app open for >10s; force terminate in Task Manager; restart; verify recovery of unsaved buffers.
-13. Build x64 Release using `SourceCodeEditor.sln`; run `build-x64.cmd` with Inno Setup installed; install/uninstall the generated x64 installer.
+## Startup and explorer
 
-These are **test instructions**, not claims that the checks have passed.
+1. Start app; four left tabs are visible: File Explorer, Opened Files, Closed Files,
+   Unsaved Files. Editor occupies most of the window width.
+2. File Explorer lists **all local/mapped drives at the top level**. The selected
+   folder and address begin at the user's `Documents` directory on EVERY launch,
+   including after previously selecting another folder and closing the app.
+3. Expand `C:\`, another drive, and nested folders. Confirm directories always
+   show, but `.png`, `.exe`, `.dll`, `.zip` and other known binary files do not;
+   `.cs`, `.cpp`, `.py`, `.md`, `.txt`, `.json`, `.CMOT`, extensionless text files
+   do appear. Create a hidden `.env`, hidden `.py` and hidden directory and verify
+   they appear without changing Windows' Explorer hidden-file setting.
+4. Try an inaccessible folder/removable drive. It must not crash. Press Refresh.
+5. File Explorer toolbar has compact Documents/Drives/Refresh commands; no large
+   Up/Shell buttons. `File > Open Folder` focuses the address field, rather than
+   launching Windows FolderBrowserDialog. Double-click a source file and check
+   that it opens in a right-hand document tab.
+6. `Tools > Locate Current File in File Explorer` highlights the file in the
+   built-in explorer (no Windows `explorer.exe` process is spawned).
+
+## Embedded shell tabs
+
+7. Expand/select `C:\Temp` (create if needed). Choose **Shell > Open shell here**.
+   Verify a new CMD tab appears alongside source tabs and executes `cd`, `dir`,
+   `echo hello` and `cd ..` persistently within the same shell process.
+8. With a saved source file active, choose **Shell > Open shell in current file's
+   location**; run `cd` to verify the starting folder. With untitled/terminal
+   tab active, the option must be disabled.
+9. Create shell tabs for user's home, Documents, and every available drive via
+   **Shell > Open shell in user's drive** subitems. Verify separate tab titles,
+   independent working directories and command histories.
+10. Right-click a file and a folder in File Explorer; **Open shell here (embedded
+    tab)** must start in the correct folder (file uses parent folder).
+11. Close a CMD tab using ×, middle click, Ctrl+W and tab context menu. Confirm
+    the associated subprocess is terminated. Verify it does not close editor
+    document tabs or discard their unsaved edits. Try two CMD tabs concurrently.
+12. Try a command producing many output lines; the UI must remain responsive.
+    Full-screen console tools are not supported by the stream-based terminal.
+
+## Existing editor regression
+
+13. Open two text/source files; verify separate closeable editor tabs and
+    source syntax formatting. Ctrl+mouse wheel scales line numbers and editor.
+14. Verify Opened/Closed/Unsaved left tabs and unsaved close prompt.
+15. Find/Replace, Find in Files, line editing, bookmarks, encodings, EOLs and
+    session recovery continue working.
+16. Build `Release | x64` in the **single** `SourceCodeEditor.sln` and run
+    `build-x64.cmd` with Inno Setup installed. Check generated installer and
+    clean install/uninstall on Windows x64.

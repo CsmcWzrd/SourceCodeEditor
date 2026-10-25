@@ -56,7 +56,7 @@ public sealed partial class MainForm
             else
                 state = JsonSerializer.Deserialize<EditorSession>(json);
             if (state == null) return;
-            if (Directory.Exists(state.ExplorerRoot)) NavigateExplorer(state.ExplorerRoot);
+            // Do not restore the old explorer path: every launch starts in Documents.
             preferredLeftWidth = Math.Clamp(state.LeftWidth, 160, 320);
             foreach (var recent in state.RecentFiles ?? new List<string>())
                 if (File.Exists(recent)) recentFiles.Add(recent);
@@ -145,5 +145,6 @@ public sealed partial class MainForm
         }
         PersistSession();
         isClosing = true;
+        CloseAllShellTabs();
     }
 }

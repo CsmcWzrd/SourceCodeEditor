@@ -18,6 +18,9 @@
     <Compile Include="MainForm.cs" />
     <Compile Include="MainForm.Editing.cs" />
     <Compile Include="MainForm.Explorer.cs" />
+    <Compile Include="MainForm.Shell.cs" />
+    <Compile Include="EmbeddedShellControl.cs" />
+    <Compile Include="TextSourceFileFilter.cs" />
     <Compile Include="MainForm.Session.cs" />
     <Compile Include="LineNumberedRichTextBox.cs" />
     <Compile Include="DocumentModel.cs" />

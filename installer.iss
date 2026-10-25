@@ -1,5 +1,5 @@
 #define AppName "SourceCodeEditor"
-#define AppVersion "0.3.0"
+#define AppVersion "0.4.0"
 [Setup]
 AppId={{2D26E54C-A46D-42A3-914A-2C665EE8CE14}
 AppName={#AppName}

@@ -34,7 +34,7 @@ public sealed partial class MainForm : Form
     };
     private readonly TextBox explorerAddress = new() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle };
     private readonly ContextMenuStrip explorerMenu = new();
-    private string explorerRoot = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    private string explorerRoot = GetDocumentsDirectory();
     private readonly SplitContainer split = new()
     {
         Dock = DockStyle.Fill, Orientation = Orientation.Vertical,
@@ -118,7 +118,12 @@ public sealed partial class MainForm : Form
         Controls.Add(root);
 
         // The menu and tab strips now have separate layout rows; neither can obscure tabs.
-        Shown += (_, _) => BeginInvoke(new Action(InitializePaneDimensions));
+        Shown += (_, _) => BeginInvoke(new Action(() =>
+        {
+            InitializePaneDimensions();
+            // The explorer always starts at Documents, never the last session folder.
+            NavigateExplorer(GetDocumentsDirectory());
+        }));
         editors.DrawItem += DrawEditorTab;
         editors.MouseDown += EditorTabMouseDown;
         editors.SelectedIndexChanged += (_, _) => { UpdateStatus(); PersistSession(); };
@@ -276,8 +281,7 @@ public sealed partial class MainForm : Form
         format.DropDownItems.Add(lineEndings);
 
         var tools = new ToolStripMenuItem("&Tools");
-        AddMenu(tools, "Open Shell in Current File Folder", Keys.None, () => OpenShell(CurrentDocument()?.Path));
-        AddMenu(tools, "Open File Location in Explorer", Keys.None, OpenFileLocation);
+        AddMenu(tools, "Locate Current File in File Explorer", Keys.None, OpenFileLocation);
         AddMenu(tools, "Save Session Now", Keys.None, PersistSession);
 
         var help = new ToolStripMenuItem("&Help");
@@ -286,7 +290,7 @@ public sealed partial class MainForm : Form
             "Original LineNumberedRichTextBox derived from CSharpCodeDetective (MIT).\n" +
             "No plugin system. Developed for Visual Studio 2022 and .NET 8.",
             "About", MessageBoxButtons.OK, MessageBoxIcon.Information));
-        menu.Items.AddRange(new ToolStripItem[] { file, edit, search, view, format, tools, help });
+        menu.Items.AddRange(new ToolStripItem[] { file, edit, search, view, format, BuildShellMenu(), tools, help });
         return menu;
     }
 
@@ -489,6 +493,11 @@ public sealed partial class MainForm : Form
     }
     private void CloseCurrent()
     {
+        if (editors.SelectedTab is TabPage tab && tab.Tag is EmbeddedShellControl)
+        {
+            CloseShellTab(tab);
+            return;
+        }
         var d = CurrentDocument(); if (d != null) CloseDocument(d);
     }
     private bool CloseDocument(EditorDocument d)
@@ -506,6 +515,7 @@ public sealed partial class MainForm : Form
     {
         foreach (var d in documents.Where(x => !x.Closed).ToArray())
             if (!CloseDocument(d)) return;
+        CloseAllShellTabs();
     }
     private void ReloadCurrent()
     {
@@ -554,7 +564,8 @@ public sealed partial class MainForm : Form
         }
         if (d.Path != null)
         {
-            menu.Items.Add("Open folder in Explorer", null, (_, _) => ShowFileInExplorer(d.Path));
+            menu.Items.Add("Locate in File Explorer", null, (_, _) => ShowFileInExplorer(d.Path));
+            menu.Items.Add("Open shell in file's folder", null, (_, _) => OpenEmbeddedShell(Path.GetDirectoryName(d.Path)));
             menu.Items.Add("Copy full path", null, (_, _) => Clipboard.SetText(d.Path));
         }
         if (d.Closed) menu.Items.Add("Remove from Closed Files", null, (_, _) =>
@@ -606,8 +617,16 @@ public sealed partial class MainForm : Form
         {
             Rectangle r = editors.GetTabRect(i);
             if (!r.Contains(e.Location)) continue;
-            var doc = editors.TabPages[i].Tag as EditorDocument;
-            if (doc == null) return;
+            var page = editors.TabPages[i];
+            if (page.Tag is EmbeddedShellControl)
+            {
+                if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && e.X >= r.Right - 25))
+                    CloseShellTab(page);
+                else if (e.Button == MouseButtons.Right)
+                    ShowShellContext(e.Location, page);
+                return;
+            }
+            if (page.Tag is not EditorDocument doc) return;
             if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && e.X >= r.Right - 25))
                 CloseDocument(doc);
             else if (e.Button == MouseButtons.Right)
@@ -621,7 +640,17 @@ public sealed partial class MainForm : Form
         var editor = d?.View?.Editor;
         if (editor == null)
         {
-            caretStatus.Text = "Ready"; encodingStatus.Text = ""; eolStatus.Text = ""; zoomStatus.Text = "";
+            if (editors.SelectedTab?.Tag is EmbeddedShellControl shell)
+            {
+                caretStatus.Text = "CMD shell: " + shell.InitialDirectory;
+                encodingStatus.Text = ""; eolStatus.Text = ""; zoomStatus.Text = "";
+                Text = "CMD - SourceCodeEditor";
+            }
+            else
+            {
+                caretStatus.Text = "Ready"; encodingStatus.Text = ""; eolStatus.Text = ""; zoomStatus.Text = "";
+                Text = "SourceCodeEditor";
+            }
             return;
         }
         int line = editor.GetLineFromCharIndex(editor.SelectionStart);

@@ -1,92 +1,114 @@
-# SourceCodeEditor — Windows x64 source editor
+# SourceCodeEditor v0.4.0 — Windows x64
 
-SourceCodeEditor is a C# WinForms source editor, built around the original
-`LineNumberedRichTextBox` RTF-backed control from the **uploaded CSharpCodeDetective**
-repository. Its original MIT license is included as `LICENSE-upstream.txt`.
+SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
+`LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
+The upstream implementation, as provided by the user, remains under
+`third_party/CSharpCodeDetective/`; the adapted control is included at the project
+root and retains RTF-backed syntax coloring.
 
-**One solution** (`SourceCodeEditor.sln`), **one project** (`SourceCodeEditor.csproj`),
-all source in the top-level `SourceCodeEditor` directory, targeting Visual Studio 2022,
-.NET 8 and Windows x64. There is **no plugin system**.
+One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
+(`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
+folder**, and Windows x64 / .NET 8 target. No plugin system.
 
-## Corrected UI layout
+## New in 0.4.0: custom drive explorer
 
-- Main window uses a 3-row `TableLayoutPanel`: menu, editor/navigation, status bar.
-  This fixes the previous docking order that obscured BOTH tab-control headers.
-- Left navigator defaults to **216 pixels**, has a draggable splitter and visible,
-  multiline headers for **File Explorer**, **Opened Files**, **Closed Files**, and
-  **Unsaved Files**, in that order.
-- The File Explorer tab has a compact `Browse...` / `Refresh` toolbar and path textbox.
-  **Up** and **Shell** large buttons have been removed. Context-click a folder or file
-  to use **Open shell here (cmd.exe)**, **Open PowerShell here**, **Set folder as root**,
-  or **Go to parent folder**.
-- The right editor pane has actual **per-document tab headers**, each with an **×**
-  close affordance, plus middle-click close, a context menu, and Ctrl+Tab switching.
-- The left three document trees have one-level lists; double-click an entry to
-  open/activate it. File Explorer has a full expandable folder tree.
+The **File Explorer** navigation tab is an **in-process TreeView** backed by
+`System.IO`; it does **not** embed or launch Windows Explorer. It always shows
+all enumerated drives as its top-level nodes (including removable drives).
+Subfolders expand on demand. Folder contents display **all directories** and
+**text/source files only**. Hidden/system files and directories are included
+(`EnumerationOptions.AttributesToSkip = 0`). Files with recognized text/source
+extensions show immediately; unknown extensions and extensionless files receive
+a small content probe to exclude obvious binary data. Inaccessible folders are
+reported in place rather than crashing the editor.
 
-## Included editing capabilities
+On **every launch**, the explorer opens at `<UserProfile>\\Documents` when it
+exists, then falls back to the Windows-configured Documents known folder, then
+the user's home folder. The last-visited session path is intentionally ignored.
+Navigation to a different folder during the session is supported through the
+address bar, drive tree, and Documents toolbar button. **Drives**, **Documents**
+and **Refresh** are small explorer toolbar commands; the old large **Up** and
+**Shell** buttons and native FolderBrowserDialog have been removed. `File > Open
+Folder` now focuses the path field to allow typing any folder path.
 
-- New, multi-file open, Save, Save As, Save All, Save Backup Copy, close, close all,
-  reload, recent files, drag-and-drop files and folders.
-- Reuse of CSharpCodeDetective's RichTextBox/RTF syntax formatting and numbered gutter.
-  Highlights many C-style languages and Python, SQL, markup, Markdown and CMotive
-  source extensions (basic tokenization, not a full language parser).
-- **Ctrl+mouse-wheel zoom scales the source and the line-number font together**.
-  Gutter width recalculates with digit count and font zoom. Zoom in/out/reset menu,
-  Word Wrap, Show Line Numbers, full-screen and optional auto-indent.
-- Undo/redo, cut/copy/paste (plain text), duplicate/delete/move line,
-  indent/unindent, toggle line comments, case transforms, trim trailing spaces,
-  sort selected lines, select all.
-- Find/replace: regex with timeouts, match case, whole words, backward, wrap,
-  Find All (click results to navigate), Replace and Replace All.
-- Find in Files: directory search, filename masks, optional recursion, regex,
-  case sensitivity and clickable results; asynchronously searches files <= 12 MB;
-  max 5,000 results per run.
-- Bookmarks (Ctrl+F2, F2, Shift+F2), Go to Line (Ctrl+G), document status line,
-  line/column, character count, encoding, EOL type and zoom level.
-- File change monitoring polls file modification time and size about every 4.5s;
-  confirms before reloading. Session snapshots every 10s include unsaved buffers,
-  closed-file list, caret positions, zoom, bookmarks, recent file list and explorer root.
-- Unicode file detection and save encoding selection: UTF-8 with/without BOM,
-  UTF-16 LE/BE, UTF-32 LE/BE and Latin-1 fallback. Supports CRLF, LF and CR
-  output selection. Atomic save via a temporary file in the same folder.
-- Print selected document as text (source highlighting is not printed).
+The full navigation bar still contains these four tabs, in order:
 
-## Build for Windows x64
+1. File Explorer
+2. Opened Files
+3. Closed Files
+4. Unsaved Files
 
-Prerequisites: **Visual Studio 2022 (17.x)** with .NET desktop development workload,
-**.NET 8 SDK**, and optionally **Inno Setup 6** to produce the installer.
+The right pane still has closable tabs for individual source/text documents.
 
-1. Extract the ZIP and open `SourceCodeEditor/SourceCodeEditor.sln`.
-2. Select `Release | x64` and use **Build > Rebuild Solution**.
-3. For a self-contained x64 publish and a setup executable, install Inno Setup 6
-   and run `SourceCodeEditor/build-x64.cmd`. The script builds
-   `dist/win-x64/SourceCodeEditor.exe` and
-   `dist/SourceCodeEditor-Setup-x64.exe`.
-4. Alternatively, the included `.github/workflows/windows-x64-installer.yml`
-   can be used on Windows GitHub Actions runners to compile and generate the installer.
+## New in 0.4.0: shell tabs
 
-The app and Inno installer target **64-bit x86 Windows only**.
+Use the **Shell** top-level menu:
 
-**Verification note:** The ZIP and C# lexical structure were checked in a Linux
-runtime. The environment did NOT have the Windows .NET SDK / Visual Studio / Inno
-Setup, so compilation, installer execution and UI tests **could not be performed**.
-The included Windows CI workflow is provided to perform those checks on a Windows runner.
+- **Open shell here**: in the selected folder in the built-in explorer (or the
+  parent directory when a file is selected).
+- **Open shell in current file's location**: uses the directory of the active,
+  saved text document; disabled for untitled buffers and when a shell tab is active.
+- **Open shell in user's home directory**.
+- **Open shell in user's Documents directory**.
+- **Open shell in user's drive > [each available drive]**: generated dynamically
+  from `DriveInfo.GetDrives()`; unavailable drives are disabled.
 
-## Remaining differences from Notepad++
+The file explorer right-click menu also contains **Open shell here (embedded tab)**.
+Every action opens an independent, closable **CMD** tab **within the same right
+editor tab control**, not a separate console window. Multiple shell tabs are
+supported. The embedded shell uses a persistent `cmd.exe /Q /D` subprocess with
+redirected standard input, output and error; its starting working directory is
+the selected path, and `cd` commands keep their context within that process.
+The bottom input field accepts commands, with Enter to execute and Up/Down for
+command history. Output can be selected/copied. Tabs are closed using ×, middle
+click, Ctrl+W or the context menu. Closing a shell disposes its subprocess.
 
-This is an expanded RTF-backed source editor, **not yet complete Notepad++ parity**.
-Not present: Scintilla's incremental large-file engine, multi-selection/column mode,
-code folding and function list, code minimap, macros, advanced lexer/parser coverage,
-project workspaces, diff tools, FTP/SFTP, and some sophisticated search and encoding
-workflows. No third-party plugins are added by design.
+**Terminal limitations:** This is a stream-based embedded command shell, not a
+Win32 ConPTY/VT terminal emulator. Shell built-ins and ordinary noninteractive
+CLI programs work, but console-dependent full-screen tools, advanced ANSI/VT
+rendering, signal handling and interactive password prompts are not supported.
+Shell tabs are not restored after restart, and commands are not recorded in the
+session file. Do not paste commands you do not trust.
 
-`RichTextBox` is an RTF-capable *editor control*, but ordinary source documents are
-saved as **plain text**, not as `.rtf` files. Syntax highlighting is in-memory only.
-BOM-less legacy code pages cannot be reliably autodetected; non-UTF8 bytes fall back
-to Latin-1. Mixed line endings are normalized to the selected EOL on saving edited
-text. Large text files can exceed the practical limits of a RichTextBox.
+## Existing editing and navigation
 
-Session recovery JSON is at `%LOCALAPPDATA%\SourceCodeEditor\session.json` and
-contains plain-text document buffers, including unsaved data. It is not encrypted.
-Keep highly sensitive documents out of autosave sessions or protect that profile.
+- Source/document tabs, Opened/Closed/Unsaved one-level file trees, session
+  recovery, unsaved buffers, close/reopen files, clipboard and editing shortcuts.
+- RTF-backed syntax coloring, scalable line-number gutter, zoom, word wrap,
+  bookmarks, auto-indent, line operations and comment toggling.
+- Find/Replace and Find in Files with regular expression/whole-word/case options.
+- Unicode encoding and newline options, backup saves, external modification
+  prompts, recent files, and status bar.
+
+`File > Open...` still uses Windows' standard file-open dialog; only the built-in
+explorer **pane** was reimplemented. The "Locate Current File in File Explorer"
+command navigates the built-in tree; it does not open `explorer.exe`.
+
+## Build / installer (Windows x64)
+
+Requires Visual Studio 2022 with .NET desktop workload and .NET 8 SDK:
+
+1. Extract ZIP; open `SourceCodeEditor/SourceCodeEditor.sln`.
+2. Select `Release | x64`, then **Build > Rebuild Solution**.
+3. Run `SourceCodeEditor/build-x64.cmd` to publish a self-contained x64 EXE.
+4. Install **Inno Setup 6** and rerun the script to also generate the x64
+   installer `SourceCodeEditor/dist/SourceCodeEditor-Setup-x64.exe`.
+5. The included Windows GitHub Actions workflow can also build/install-package
+   on a Windows runner.
+
+**Verification:** The archive and source-level references are checked during
+packaging. A Windows .NET SDK/Visual Studio installation is not available in
+this environment; an actual compilation, UI run, shell execution, and installer
+run have **not** been verified. The ZIP contains source and an installer
+**recipe**, not a precompiled installer binary.
+
+## Remaining Notepad++ differences
+
+No code folding, multi-caret/column editing, fully interactive terminal/ConPTY,
+macros, or large-file incremental engine. This project does **not** include
+plugins, as requested. Syntax formatting is performed in an RTF-backed
+RichTextBox control; text files are saved as source text rather than RTF.
+
+Recovery snapshots are stored as plaintext at
+`%LOCALAPPDATA%\\SourceCodeEditor\\session.json`; avoid storing secrets in
+unsaved buffers unless your Windows profile/storage is appropriately secured.
