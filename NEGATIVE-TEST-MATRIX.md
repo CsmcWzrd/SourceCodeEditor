@@ -132,3 +132,17 @@ Interactive Windows-only tests additionally cover the toolbar/context-menu
 `ObjectDisposedException`, 12 pt Regular RTF font, main-window exit recovery
 without Save prompts, shell-tab closure, and blocked session writes. See
 `SMOKE-TESTS.md` for step-by-step acceptance criteria.
+
+## v0.5.4 — New regression scenarios
+
+- Locate an existing file via a refreshed built-in explorer tree, including
+  files created since the last tree expansion.
+- Locate deleted file, deleted parent folder, renamed parent folder, missing
+  nested ancestor, Unicode filename and invalid path characters.
+- Locate unsaved Untitled document or active terminal: explain the unavailable
+  source path instead of silently doing nothing.
+- Persist and reload separate editor and application font family names and
+  font sizes; load old sessions with absent family properties.
+- Windows installed-font catalog: only regular fixed-width families,
+  no duplicate menu entries and no known nonexistent fonts.
+

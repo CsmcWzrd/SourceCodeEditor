@@ -1,9 +1,9 @@
 {
   "kind": "structural-and-filesystem-fixture (not compiled C#)",
-  "total": 79,
-  "passed": 79,
+  "total": 94,
+  "passed": 94,
   "failed": 0,
-  "distinct_headless_negative_tests_in_CSharp": 110,
+  "distinct_headless_negative_tests_in_CSharp": 122,
   "results": [
     {
       "name": "single-solution",
@@ -31,6 +31,14 @@
     },
     {
       "name": "source-exists:MainForm.FontSizing.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MonospacedFontCatalog.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:ExplorerNavigationPlan.cs",
       "status": "PASS"
     },
     {
@@ -166,7 +174,51 @@
       "status": "PASS"
     },
     {
-      "name": "v053-version",
+      "name": "v055-version",
+      "status": "PASS"
+    },
+    {
+      "name": "monospaced-font-catalog-is-included",
+      "status": "PASS"
+    },
+    {
+      "name": "monospaced-font-menu-both-categories",
+      "status": "PASS"
+    },
+    {
+      "name": "fixed-width-measured-not-hardcoded",
+      "status": "PASS"
+    },
+    {
+      "name": "font-catalog-valid-glyph-loop",
+      "status": "PASS"
+    },
+    {
+      "name": "font-catalog-no-illegal-collection-initializer-chain",
+      "status": "PASS"
+    },
+    {
+      "name": "font-family-saved-in-session",
+      "status": "PASS"
+    },
+    {
+      "name": "font-family-restored-in-session",
+      "status": "PASS"
+    },
+    {
+      "name": "file-location-uses-built-in-explorer",
+      "status": "PASS"
+    },
+    {
+      "name": "file-location-invalidates-cache",
+      "status": "PASS"
+    },
+    {
+      "name": "file-location-nearest-accessible-folder",
+      "status": "PASS"
+    },
+    {
+      "name": "file-location-no-windows-explorer",
       "status": "PASS"
     },
     {
@@ -246,6 +298,10 @@
       "status": "PASS"
     },
     {
+      "name": "balanced-delimiters:MonospacedFontCatalog.cs",
+      "status": "PASS"
+    },
+    {
       "name": "balanced-delimiters:NegativeSelfTest.cs",
       "status": "PASS"
     },
@@ -283,6 +339,10 @@
     },
     {
       "name": "balanced-delimiters:MainForm.Shell.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:ExplorerNavigationPlan.cs",
       "status": "PASS"
     },
     {

@@ -11,7 +11,10 @@ internal static class Program
         if (args.Length > 0 && string.Equals(args[0], "--self-test-conpty", StringComparison.OrdinalIgnoreCase))
             return ConPtySelfTest.Run(args.Length > 1 ? args[1] : null);
         if (args.Length > 0 && string.Equals(args[0], "--self-test-negative", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplicationConfiguration.Initialize();
             return NegativeSelfTest.Run(args.Length > 1 ? args[1] : null);
+        }
         ApplicationConfiguration.Initialize();
         // Log unexpected runtime failures in the user's local profile instead
         // of showing an unhelpful Just-In-Time debugging dump. Fatal errors

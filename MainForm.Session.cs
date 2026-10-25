@@ -42,6 +42,8 @@ public sealed partial class MainForm
                 LeftWidth = split.Panel1Collapsed ? 252 : split.SplitterDistance,
                 ApplicationFontPoints = applicationFontPoints,
                 EditorFontPoints = editorFontPoints,
+                ApplicationFontFamily = applicationFontFamily,
+                EditorFontFamily = editorFontFamily,
                 RecentFiles = recentFiles.ToList(),
                 ReopenClosedOnStartup = reopenClosedOnStartup
             };
@@ -68,6 +70,8 @@ public sealed partial class MainForm
                 reopenClosedOnStartupMenu.Checked = reopenClosedOnStartup;
             // Do not restore the old explorer path: every launch starts in Documents.
             preferredLeftWidth = Math.Clamp(state.LeftWidth, 242, 320);
+            applicationFontFamily = MonospacedFontCatalog.InstalledOrDefault(state.ApplicationFontFamily, "Segoe UI");
+            editorFontFamily = MonospacedFontCatalog.InstalledOrDefault(state.EditorFontFamily, "Consolas");
             SetApplicationFontSize(state.ApplicationFontPoints, false);
             SetEditorFontSize(state.EditorFontPoints, false);
             foreach (var recent in state.RecentFiles ?? new List<string>())

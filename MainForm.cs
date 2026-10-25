@@ -297,6 +297,17 @@ public sealed partial class MainForm : Form
         AddMenu(editorFontMenu, "Decrease Editor Font (-1 pt)", Keys.None, () => SetEditorFontSize(editorFontPoints - 1));
         AddMenu(editorFontMenu, "Reset Editor Font (12 pt)", Keys.None, () => SetEditorFontSize(DefaultFontPoints));
         view.DropDownItems.Add(editorFontMenu);
+        var monospacedFamilies = new ToolStripMenuItem("Monospaced Fonts");
+        applicationMonospacedFonts = new ToolStripMenuItem("Application Interface");
+        editorMonospacedFonts = new ToolStripMenuItem("RTF Source Editor");
+        monospacedFamilies.DropDownItems.Add(editorMonospacedFonts);
+        monospacedFamilies.DropDownItems.Add(applicationMonospacedFonts);
+        // Enumerate Windows-installed regular fixed-width families only on demand.
+        // Avoid re-creating menu objects while processing a menu item click.
+        monospacedFamilies.DropDownOpening += (_, _) => EnsureFontChoices();
+        editorMonospacedFonts.DropDownOpening += (_, _) => UpdateFontChoiceChecks();
+        applicationMonospacedFonts.DropDownOpening += (_, _) => UpdateFontChoiceChecks();
+        view.DropDownItems.Add(monospacedFamilies);
         view.DropDownItems.Add(new ToolStripSeparator());
         AddMenu(view, "Zoom In", Keys.Control | Keys.Oemplus, () => ChangeZoom(0.10f));
         AddMenu(view, "Zoom Out", Keys.Control | Keys.OemMinus, () => ChangeZoom(-0.10f));
@@ -472,7 +483,7 @@ public sealed partial class MainForm : Form
                 DocumentFilePath = d.Path ?? d.Name, ShowLineNumbers = showLineNumbers, Bookmarks = d.Bookmarks
             };
             control.Editor.WordWrap = d.WordWrap;
-            control.SetBaseFontSize(editorFontPoints);
+            control.SetBaseFont(editorFontFamily, editorFontPoints);
             control.Editor.ZoomFactor = Math.Clamp(d.Zoom, 0.5f, 4f);
             ignoreTextChanged = true;
             control.LoadText(d.Buffer, d.Path ?? d.Name);

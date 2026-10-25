@@ -1,4 +1,4 @@
-# Windows x64 build — SourceCodeEditor 0.5.3
+# Windows x64 build — SourceCodeEditor 0.5.4
 
 This project contains exactly one solution (`SourceCodeEditor.sln`) and one
 project (`SourceCodeEditor.csproj`). It explicitly lists compiled source files
@@ -78,3 +78,11 @@ file/session tests. Before releasing an installer, also test on Windows:
 
 The test report must distinguish source checks from an actually compiled and
 executed Windows GUI/ConPTY test.
+
+## v0.5.4 Windows acceptance
+
+After building and running `negative-smoke.ps1`, verify View → Monospaced Fonts
+(RTF Source Editor and Application Interface), choose and persist a non-default
+fixed-width font, and check Tools → Locate Current File in File Explorer for
+saved, unsaved and deleted files. The File Explorer is the app's own TreeView,
+not a launched Windows Explorer window. See SMOKE-TESTS.md.

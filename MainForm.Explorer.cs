@@ -325,13 +325,79 @@ public sealed partial class MainForm
 
     private void OpenFileLocation()
     {
-        string? file = CurrentDocument()?.Path;
-        if (file != null) ShowFileInExplorer(file);
+        // This command targets the built-in File Explorer tab, as requested;
+        // it must not launch the Windows Explorer shell.
+        navigation.SelectedIndex = 0;
+        var doc = CurrentDocument();
+        if (doc == null)
+        {
+            NavigateExplorer(GetDocumentsDirectory());
+            explorer.Focus();
+            MessageBox.Show(this,
+                "The active tab is not a source file. Select an editor tab to locate its file.",
+                "Locate current file", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (doc.Path == null)
+        {
+            if (doc.RecoverySourcePath != null)
+            {
+                ShowFileInExplorer(doc.RecoverySourcePath);
+                return;
+            }
+            // Unsaved Untitled documents do not yet have a disk location.
+            NavigateExplorer(GetDocumentsDirectory());
+            explorer.Focus();
+            MessageBox.Show(this,
+                "This document has not been saved to a file. Use File > Save As first. " +
+                "The built-in File Explorer is showing your Documents folder.",
+                "Locate current file", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        ShowFileInExplorer(doc.Path);
     }
 
     private void ShowFileInExplorer(string? path)
     {
-        // Locate in OUR explorer instead of starting Windows explorer.exe.
-        if (!string.IsNullOrWhiteSpace(path)) NavigateExplorer(path);
+        navigation.SelectedIndex = 0;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            NavigateExplorer(GetDocumentsDirectory());
+            explorer.Focus();
+            return;
+        }
+        try
+        {
+            var plan = ExplorerNavigationPlan.ForFile(path, GetDocumentsDirectory());
+            // Cached nodes can be out of date when a file was created,
+            // renamed, deleted or moved outside SourceCodeEditor.
+            RefreshDriveTree();
+            NavigateExplorer(plan.FileExists ? plan.TargetFile : plan.DirectoryToShow);
+            explorer.Focus();
+            if (!plan.FileExists)
+            {
+                MessageBox.Show(this,
+                    "The original file could not be found:\n" + plan.TargetFile +
+                    "\n\nThe built-in File Explorer has been opened at the nearest " +
+                    "available parent folder. The cached editor contents remain available.",
+                    "File no longer available", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (explorer.SelectedNode?.Tag is not ExplorerItem selected ||
+                selected.IsFolder ||
+                !string.Equals(selected.Path, plan.TargetFile, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(this,
+                    "The file exists, but the built-in explorer could not display its entry. " +
+                    "It may be inaccessible, excluded by the text/source-file filter, " +
+                    "or have changed during navigation.\n\n" + plan.TargetFile,
+                    "Unable to select file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            MessageBox.Show(this, "Cannot locate the file: " + ex.Message,
+                "Locate current file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 }

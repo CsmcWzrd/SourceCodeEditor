@@ -1,4 +1,6 @@
-# SourceCodeEditor v0.5.3 — Windows x64
+> **v0.5.5 build hotfix:** Corrects the invalid `MonospacedFontCatalog.cs` initializer which produced CS1003, CS1002, and CS0103. See `RELEASE-TEST-REPORT-v055.md`.
+
+# SourceCodeEditor v0.5.4 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -9,6 +11,41 @@ root and retains RTF-backed syntax coloring.
 One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
+
+## New in 0.5.4: Installed monospaced fonts and file location
+
+- **View → Monospaced Fonts → RTF Source Editor** lists the installed font
+  families that pass a regular-weight fixed-width glyph check. Choosing one
+  changes all editor tabs, including the line-number gutter. Colors and
+  per-document zoom remain intact. Size is independently controlled by
+  View → RTF Editor Font (8–32 pt).
+- **View → Monospaced Fonts → Application Interface** provides the same font
+  list for menus, tabs, navigation trees and the general WinForms interface.
+  Application font size remains independently adjustable (8–32 pt).
+- The font menus are populated from fonts *actually installed on the user's
+  Windows machine*; the list is not a fixed set of names. Windows generally
+  includes Consolas and Courier New; additional fonts appear only if installed
+  and classified as fixed-width using representative Latin glyphs. Fonts with
+  variable Latin character widths are omitted. Only Regular styles are used;
+  editors do **not** become bold by default.
+- Application and editor family names and sizes are persisted in
+  `%LOCALAPPDATA%\SourceCodeEditor\session.json`. Older sessions without family
+  properties retain the defaults Segoe UI (application) and Consolas (editor).
+  Invalid or uninstalled saved font families fall back to defaults.
+- **Tools → Locate Current File in File Explorer** explicitly switches to the
+  built-in File Explorer navigation tab, refreshes its drive tree and selects
+  the saved file. No Windows `explorer.exe` process is launched. With a deleted
+  file or renamed folder it selects the nearest existing parent and warns;
+  with an untitled document or active shell tab it explains why no file can
+  be selected. Right-click → Locate in File Explorer uses the same routine.
+- Source-only regression cases are included for existing/missing files, renamed
+  directories, Unicode paths, and persisted font settings. Windows native
+  font checks run via `negative-smoke.ps1`; interactive acceptance steps are
+  documented in `SMOKE-TESTS.md`.
+
+**Validation distinction:** This is source code and installer configuration,
+not a precompiled Windows installer. Static/fixture tests can run in Linux;
+WinForms rendering and Visual Studio compilation require Windows.
 
 ## New in 0.5.3: startup recovery, 12 pt regular font and UI exception fix
 

@@ -52,6 +52,8 @@ internal sealed class EditorSession
     public int LeftWidth { get; set; } = 216;
     public float ApplicationFontPoints { get; set; } = 12f;
     public float EditorFontPoints { get; set; } = 12f;
+    public string ApplicationFontFamily { get; set; } = "Segoe UI";
+    public string EditorFontFamily { get; set; } = "Consolas";
     public List<string> RecentFiles { get; set; } = new();
     // The user can disable automatically reopening closed documents while
     // keeping their entries available in the Closed Files navigator.

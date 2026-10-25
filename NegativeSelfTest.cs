@@ -696,6 +696,92 @@ internal static class NegativeSelfTest
                 string p = Path.Combine(f, "fake.py"); File.WriteAllBytes(p, Enumerable.Repeat((byte)0x01, 50).ToArray());
                 Require(!TextSourceFileFilter.IsTextOrSource(p));
             });
+
+            // v0.5.4: Find the current file in the custom explorer, not explorer.exe.
+            Test("locate:existing-saved-file", f =>
+            {
+                string path = Write(f, "main.cs", "class Main { }");
+                var route = ExplorerNavigationPlan.ForFile(path, f);
+                Require(route.FileExists && route.OriginalDirectoryExists);
+                Require(string.Equals(route.TargetFile, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase));
+                Require(string.Equals(route.DirectoryToShow, f, StringComparison.OrdinalIgnoreCase));
+            });
+            Test("locate:missing-file-in-existing-folder", f =>
+            {
+                var route = ExplorerNavigationPlan.ForFile(Path.Combine(f, "deleted.py"), f);
+                Require(!route.FileExists && route.OriginalDirectoryExists);
+                Require(route.DirectoryToShow == f);
+            });
+            Test("locate:deleted-parent-folder", f =>
+            {
+                string child = Path.Combine(f, "deleted"); Directory.CreateDirectory(child);
+                var target = Path.Combine(child, "a.cs"); File.WriteAllText(target, "text");
+                Directory.Delete(child, true);
+                var route = ExplorerNavigationPlan.ForFile(target, f);
+                Require(!route.FileExists && !route.OriginalDirectoryExists);
+                Require(route.DirectoryToShow == f);
+            });
+            Test("locate:renamed-parent-folder", f =>
+            {
+                string child = Path.Combine(f, "before"); Directory.CreateDirectory(child);
+                string file = Write(child, "unit.cs");
+                Directory.Move(child, Path.Combine(f, "after"));
+                var route = ExplorerNavigationPlan.ForFile(file, f);
+                Require(!route.FileExists && !route.OriginalDirectoryExists && route.DirectoryToShow == f);
+            });
+            Test("locate:deepest-existing-parent", f =>
+            {
+                string a = Path.Combine(f, "a"); Directory.CreateDirectory(a);
+                var route = ExplorerNavigationPlan.ForFile(Path.Combine(a, "missing", "deeper", "x.cs"), f);
+                Require(!route.FileExists && route.DirectoryToShow == a);
+            });
+            Test("locate:unicode-file-name", f =>
+            {
+                string file = Write(f, "こんにちは_源コード.cs", "text");
+                var route = ExplorerNavigationPlan.ForFile(file, f);
+                Require(route.FileExists && route.TargetFile == Path.GetFullPath(file));
+            });
+            Test("locate:blank-document-path-rejected", f =>
+                ExpectThrows<ArgumentException>(() => ExplorerNavigationPlan.ForFile("", f)));
+            Test("locate:invalid-NUL-filename", f =>
+                ExpectThrows<ArgumentException>(() => ExplorerNavigationPlan.ForFile("bad\0file", f)));
+            Test("fonts:chosen-families-survive-session-restart", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                var state = new EditorSession
+                {
+                    ApplicationFontFamily = "Courier New", EditorFontFamily = "Consolas",
+                    ApplicationFontPoints = 13f, EditorFontPoints = 15f
+                };
+                SessionFileStore.Save(path, state);
+                var restored = SessionFileStore.Load(path);
+                Require(restored.ApplicationFontFamily == "Courier New" && restored.EditorFontFamily == "Consolas");
+                Require(restored.ApplicationFontPoints == 13f && restored.EditorFontPoints == 15f);
+            });
+            Test("fonts:old-session-default-families", f =>
+            {
+                string path = Path.Combine(f, "session.json");
+                File.WriteAllText(path, "{\"Documents\":[],\"ApplicationFontPoints\":12,\"EditorFontPoints\":12}");
+                var restored = SessionFileStore.Load(path);
+                Require(restored.ApplicationFontFamily == "Segoe UI" && restored.EditorFontFamily == "Consolas");
+            });
+            if (OperatingSystem.IsWindows())
+            {
+                Test("fonts:installed-fixed-pitch-list", f =>
+                {
+                    var available = MonospacedFontCatalog.ListInstalled();
+                    Require(available.Count > 0, "No installed monospaced fonts detected");
+                    Require(available.Distinct(StringComparer.OrdinalIgnoreCase).Count() == available.Count,
+                        "Duplicate font name");
+                    foreach (var name in available)
+                    {
+                        using var font = new System.Drawing.Font(name, 12f, System.Drawing.FontStyle.Regular);
+                        Require(MonospacedFontCatalog.IsMonospaced(font), "Non-monospaced font: " + name);
+                    }
+                });
+                Test("fonts:unknown-font-restores-default", f =>
+                    Require(MonospacedFontCatalog.InstalledOrDefault("MissingFont_" + Guid.NewGuid(), "Consolas") == "Consolas"));
+            }
         }
         finally
         {

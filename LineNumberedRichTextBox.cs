@@ -91,7 +91,9 @@ public sealed class LineNumberedRichTextBox : UserControl
     /// Preserve RTF syntax token colors by changing only the selection font;
     /// the caller suppresses document-change tracking during this operation.
     /// </summary>
-    public void SetBaseFontSize(float points)
+    public void SetBaseFontSize(float points) => SetBaseFont(Editor.Font.FontFamily.Name, points);
+
+    public void SetBaseFont(string familyName, float points)
     {
         if (IsDisposed || Editor.IsDisposed) return;
         points = Math.Clamp(points, 8f, 32f);
@@ -103,7 +105,7 @@ public sealed class LineNumberedRichTextBox : UserControl
         float zoom = Editor.ZoomFactor;
         using (new RedrawScope(Editor))
         {
-            Editor.Font = new Font("Consolas", points, FontStyle.Regular, GraphicsUnit.Point);
+            Editor.Font = new Font(familyName, points, FontStyle.Regular, GraphicsUnit.Point);
             if (Editor.TextLength > 0)
             {
                 Editor.SelectAll();

@@ -1,3 +1,35 @@
+
+## v0.5.4: Monospaced font menu and locate-current-file
+
+1. Open **View → Monospaced Fonts**. Confirm two submenus: **RTF Source Editor**
+   and **Application Interface**. Each should enumerate installed regular
+   fixed-width font families and show a check mark for the active choice when
+   that choice is part of the monospaced list.
+2. Select two different installed monospaced families in the editor submenu,
+   with `.cs` and `.py` files open. All RTF editor tabs (including gutter)
+   should use the chosen font; font weight should be **Regular**, not Bold.
+   Syntax token colors, caret selection, line numbers, and zoom should remain.
+3. Choose a monospaced family for the application UI; verify left navigator,
+   tabs, menu strip, explorer tree, status and shell tab UI. Resize/zoom afterward
+   and check there are no splitter exceptions or clipped navigation captions.
+4. Set editor font to 15 pt and application to 13 pt, close and reopen the app.
+   Both font family choices and both sizes should be restored from `session.json`.
+   Remove one installed font and restart: the unavailable family should fall
+   back to Consolas/Segoe UI, not crash or damage recovered documents.
+5. Open an existing `.cs` file, choose **Tools → Locate Current File in File
+   Explorer**: the File Explorer navigation tab must become active and the file
+   must be selected in the tree. Repeat after navigating elsewhere in the tree,
+   after adding a file externally, and for hidden files.
+6. Delete or rename a previously opened file/folder externally, then choose
+   Locate: the closest existing parent folder should be selected and a clear
+   warning shown, without losing the editor's cached content. Test disconnected
+   drives and protected directories as well.
+7. With an unsaved `Untitled` document selected, choose Locate: the built-in
+   explorer opens at Documents and explains that Save As is required. With a
+   CMD shell tab selected, Locate should explain that there is no source file.
+8. Right-click a file in **Opened Files** or **Closed Files** and choose Locate:
+   verify it uses the same internal navigation logic, including missing paths.
+
 # SourceCodeEditor 0.5.3 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
