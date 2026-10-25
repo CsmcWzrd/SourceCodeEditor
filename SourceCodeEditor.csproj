@@ -9,6 +9,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
     <AssemblyName>SourceCodeEditor</AssemblyName>
+    <Version>0.5.1</Version>
     <RootNamespace>SourceCodeEditor</RootNamespace>
     <ApplicationIcon>SourceCodeEditor.ico</ApplicationIcon>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -22,6 +23,7 @@
     <Compile Include="MainForm.Shell.cs" />
     <Compile Include="EmbeddedShellControl.cs" />
     <Compile Include="WindowsPseudoConsole.cs" />
+    <Compile Include="ConPtySelfTest.cs" />
     <Compile Include="TerminalScreen.cs" />
     <Compile Include="TextSourceFileFilter.cs" />
     <Compile Include="MainForm.Session.cs" />

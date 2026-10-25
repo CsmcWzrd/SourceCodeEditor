@@ -1,4 +1,4 @@
-# SourceCodeEditor v0.5.0 — Windows x64
+# SourceCodeEditor v0.5.1 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -9,6 +9,32 @@ root and retains RTF-backed syntax coloring.
 One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
+
+## New in 0.5.1: fix detached CMD and empty shell tab
+
+**Root cause fixed:** The ConPTY process attribute was created using
+`ref pseudoConsole` rather than the HPCON handle value. Unlike typical pointer
+attributes, `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` requires the raw handle as
+`lpValue` (`UpdateProcThreadAttribute(..., hpc, sizeof(hpc), ...)`). Passing a
+pointer to that handle broke attachment and could launch a separate Windows
+Terminal window while leaving the built-in tab blank. The P/Invoke signature
+and call now pass `pseudoConsole` directly, following Microsoft's ConPTY code.
+
+The shell tab also includes a startup watchdog: if its output pipe stays silent
+for ten seconds, it reports a connection failure **inside the tab** and stops
+the process. This prevents silently persisting a black editor panel.
+
+A Windows-only self-test is available:
+
+```
+powershell -ExecutionPolicy Bypass -File conpty-smoke.ps1
+```
+
+The script runs the published EXE with `--self-test-conpty`, which launches CMD
+on the real ConPTY backend, sends `echo`, and checks for command output returned
+through SourceCodeEditor's own pipe. The self-test is integrated into the
+Windows x64 CI workflow. **This environment has no Windows/.NET SDK**, so the
+Windows build, self-test and GUI scenario still require execution on Windows.
 
 ## New in 0.5.0: interactive Windows ConPTY terminal tabs
 

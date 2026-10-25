@@ -27,6 +27,14 @@ jobs:
       - name: Publish Windows x64 application
         shell: pwsh
         run: dotnet publish SourceCodeEditor.csproj -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/win-x64
+      - name: Verify CMD is attached to embedded ConPTY (no external console)
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'dist/win-x64/SourceCodeEditor.exe'
+          $report = Join-Path $env:RUNNER_TEMP 'sourcecodeeditor-conpty-test.txt'
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test-conpty `"$report`"" -PassThru -Wait
+          if (Test-Path $report) { Get-Content $report }
+          if ($process.ExitCode -ne 0) { throw "Embedded ConPTY self-test failed (exit $($process.ExitCode))" }
       - name: Build installer
         shell: pwsh
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer.iss'

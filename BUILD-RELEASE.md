@@ -1,4 +1,4 @@
-# Windows x64 build — SourceCodeEditor 0.5.0
+# Windows x64 build — SourceCodeEditor 0.5.1
 
 This project contains exactly one solution (`SourceCodeEditor.sln`) and one
 project (`SourceCodeEditor.csproj`). It explicitly lists compiled source files
@@ -21,3 +21,11 @@ The interactive shell uses native Windows ConPTY (Windows 10 version 1809+
 and Windows 11). The shell is part of the WinForms project, not a NuGet
 terminal package. Test the ConPTY interop and key bindings on Windows with
 `SMOKE-TESTS.md` before distributing the installer.
+
+## ConPTY attachment verification (important on Windows 11)
+
+After publishing, run `powershell -ExecutionPolicy Bypass -File conpty-smoke.ps1`.
+The test invokes the same ConPTY backend as the embedded shell without a GUI,
+reads its own output pipe, and fails if CMD has not attached properly.
+It also runs in the supplied Windows x64 GitHub Actions workflow before building
+the installer. The Windows GUI test is still required afterward.

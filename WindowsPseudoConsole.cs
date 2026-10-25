@@ -82,7 +82,7 @@ internal sealed class WindowsPseudoConsole : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UpdateProcThreadAttribute(IntPtr attributeList, uint flags,
-        IntPtr attribute, ref IntPtr value, IntPtr size, IntPtr previous, IntPtr returnSize);
+        IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr returnSize);
 
     [DllImport("kernel32.dll")]
     private static extern void DeleteProcThreadAttributeList(IntPtr attributeList);
@@ -142,8 +142,14 @@ internal sealed class WindowsPseudoConsole : IDisposable
             if (!InitializeProcThreadAttributeList(attributeList, 1, 0, ref listSize))
                 ThrowWin32("InitializeProcThreadAttributeList");
             initialized = true;
+            // PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE is special: lpValue must be
+            // the HPCON value itself. Passing ref pseudoConsole here yields
+            // HPCON* (one extra level of indirection), which can cause cmd.exe
+            // to detach into the user's default terminal (Windows Terminal)
+            // while our embedded tab remains blank. See Microsoft's ConPTY
+            // sample: UpdateProcThreadAttribute(..., hpc, sizeof(hpc), ...).
             if (!UpdateProcThreadAttribute(attributeList, 0, (IntPtr)ProcThreadAttributePseudoConsole,
-                ref pseudoConsole, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero))
+                pseudoConsole, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero))
                 ThrowWin32("UpdateProcThreadAttribute");
 
             string exe = Path.Combine(Environment.SystemDirectory, "cmd.exe");

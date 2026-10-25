@@ -1,3 +1,17 @@
-using System; using System.Windows.Forms;
+using System;
+using System.Windows.Forms;
+
 namespace SourceCodeEditor;
-internal static class Program { [STAThread] static void Main(string[] args) { ApplicationConfiguration.Initialize(); Application.Run(new MainForm(args)); } }
+
+internal static class Program
+{
+    [STAThread]
+    private static int Main(string[] args)
+    {
+        if (args.Length > 0 && string.Equals(args[0], "--self-test-conpty", StringComparison.OrdinalIgnoreCase))
+            return ConPtySelfTest.Run(args.Length > 1 ? args[1] : null);
+        ApplicationConfiguration.Initialize();
+        Application.Run(new MainForm(args));
+        return 0;
+    }
+}

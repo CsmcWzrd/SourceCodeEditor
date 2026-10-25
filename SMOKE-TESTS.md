@@ -1,4 +1,4 @@
-# SourceCodeEditor 0.5.0 — Windows x64 smoke-test checklist
+# SourceCodeEditor 0.5.1 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
 for Visual Studio 2022 / Windows 10 or Windows 11 x64.
@@ -61,6 +61,27 @@ for Visual Studio 2022 / Windows 10 or Windows 11 x64.
     exit and confirm colors and prompt are rendered. Repeat with two tabs.
 12g. Close a running `ping -t` shell tab. Confirm child processes and pipe
     handles are released and the UI doesn't hang.
+
+## ConPTY attachment regression (0.5.1)
+
+The v0.5.0 implementation mistakenly passed `ref pseudoConsole` to
+`UpdateProcThreadAttribute` and thereby passed an HPCON pointer instead of the
+HPCON handle value. Windows could open CMD in a separate Windows Terminal
+window and leave SourceCodeEditor with a blank shell tab. The C# P/Invoke now
+accepts `IntPtr` for `lpValue`, and receives the pseudoconsole handle directly.
+
+- Build/publish `Release|x64` and run the `conpty-smoke.ps1` script. Its
+  headless self-test creates CMD using the exact application ConPTY backend,
+  writes an `echo` command, and checks that the result is received on the
+  application's own output pipe. No external Windows Terminal should appear.
+- Open **Shell > Open shell in user's Documents directory** in the GUI.
+  Verify that CMD's version banner and `C:\...>` prompt are displayed in the
+  **same dark editor tab**, not in any external console window.
+- Type `echo hello`, `dir`, `cd`, `cls`, arrow up/down, and `exit` directly in
+  the editor tab. Try multiple shell tabs and close them using the tab X.
+- Temporarily test a failure to attach: the shell must display an error inside
+  the tab rather than remain black for more than ten seconds. Restore the
+  correct ConPTY implementation before shipping.
 
 ## Existing editor regression
 

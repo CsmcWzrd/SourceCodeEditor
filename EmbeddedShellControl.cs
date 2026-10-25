@@ -323,6 +323,10 @@ public sealed class EmbeddedShellControl : UserControl
     private readonly TerminalSurface terminal = new();
     private readonly ConcurrentQueue<string> outputQueue = new();
     private readonly System.Windows.Forms.Timer flushTimer = new() { Interval = 35 };
+    // If a broken ConPTY attachment produces no output, fail visibly in the
+    // embedded tab instead of leaving an empty black surface indefinitely.
+    private readonly System.Windows.Forms.Timer startupTimer = new() { Interval = 10000 };
+    private volatile bool receivedPtyOutput;
     private WindowsPseudoConsole? session;
     private bool isDisposed;
     private int queuedCharacters;
@@ -341,6 +345,15 @@ public sealed class EmbeddedShellControl : UserControl
         Controls.Add(terminal);
         flushTimer.Tick += (_, _) => FlushOutput();
         flushTimer.Start();
+        startupTimer.Tick += (_, _) =>
+        {
+            startupTimer.Stop();
+            if (isDisposed || receivedPtyOutput || session == null) return;
+            StopShell();
+            terminal.Output("\r\n\x1b[91mThe shell did not attach to the built-in terminal.\x1b[0m\r\n" +
+                "ConPTY produced no output within 10 seconds; session stopped.\r\n" +
+                "Try the bundled --self-test-conpty diagnostic.\r\n");
+        };
     }
 
     /// <summary>Application font preference. Terminal keeps independent Ctrl+wheel zoom.</summary>
@@ -356,11 +369,13 @@ public sealed class EmbeddedShellControl : UserControl
         try
         {
             // No banner, top toolbar, or fake prompt: cmd.exe paints its own prompt.
+            receivedPtyOutput = false;
             terminal.Output("\x1b[0m");
             session = new WindowsPseudoConsole(InitialDirectory, terminal.Columns, terminal.Rows);
             session.OutputReceived += text =>
             {
                 if (isDisposed) return;
+                if (text.Length > 0) receivedPtyOutput = true;
                 int pending = Interlocked.Add(ref queuedCharacters, text.Length);
                 if (pending > 2_000_000)
                 {
@@ -379,6 +394,7 @@ public sealed class EmbeddedShellControl : UserControl
                 }
             };
             session.BeginStreaming();
+            startupTimer.Start();
             terminal.ShowCaret = true;
             FocusCommand();
         }
@@ -394,6 +410,7 @@ public sealed class EmbeddedShellControl : UserControl
     private void FlushOutput()
     {
         if (isDisposed) return;
+        if (receivedPtyOutput) startupTimer.Stop();
         var batch = new StringBuilder(65536);
         int count = 0;
         while (count++ < 256 && batch.Length < 65536 && outputQueue.TryDequeue(out string? chunk))
@@ -407,6 +424,7 @@ public sealed class EmbeddedShellControl : UserControl
     public void FocusCommand() => terminal.Focus();
     public void StopShell()
     {
+        startupTimer.Stop();
         var previous = session;
         session = null;
         previous?.Dispose();
@@ -421,6 +439,7 @@ public sealed class EmbeddedShellControl : UserControl
             flushTimer.Stop();
             StopShell();
             flushTimer.Dispose();
+            startupTimer.Dispose();
         }
         base.Dispose(disposing);
     }
