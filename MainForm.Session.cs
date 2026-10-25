@@ -10,9 +10,11 @@ namespace SourceCodeEditor;
 public sealed partial class MainForm
 {
     private bool sessionLoading;
+    // Never overwrite an unreadable session unless its original was rescued.
+    private bool disableSessionWrites;
     private void PersistSession()
     {
-        if (sessionLoading || isClosing || IsDisposed) return;
+        if (sessionLoading || isClosing || IsDisposed || disableSessionWrites) return;
         try
         {
             foreach (var doc in documents.Where(x => x.View != null))
@@ -32,11 +34,7 @@ public sealed partial class MainForm
                 EditorFontPoints = editorFontPoints,
                 RecentFiles = recentFiles.ToList()
             };
-            Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
-            var temporary = sessionPath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(state,
-                new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temporary, sessionPath, true);
+            SessionFileStore.Save(sessionPath, state);
         }
         catch (Exception)
         {
@@ -49,33 +47,62 @@ public sealed partial class MainForm
         sessionLoading = true;
         try
         {
-            var json = File.ReadAllText(sessionPath);
-            using var parsed = JsonDocument.Parse(json);
-            EditorSession? state;
-            // Compatibility with the original SourceCodeEditor session file, which was a JSON array.
-            if (parsed.RootElement.ValueKind == JsonValueKind.Array)
-                state = new EditorSession { Documents = JsonSerializer.Deserialize<List<EditorDocument>>(json) ?? new() };
-            else
-                state = JsonSerializer.Deserialize<EditorSession>(json);
-            if (state == null) return;
+            EditorSession state = SessionFileStore.Load(sessionPath);
             // Do not restore the old explorer path: every launch starts in Documents.
             preferredLeftWidth = Math.Clamp(state.LeftWidth, 242, 320);
-            // Restore font sizes BEFORE constructing recovered editor views.
             SetApplicationFontSize(state.ApplicationFontPoints, false);
             SetEditorFontSize(state.EditorFontPoints, false);
             foreach (var recent in state.RecentFiles ?? new List<string>())
-                if (File.Exists(recent)) recentFiles.Add(recent);
+            {
+                if (recentFiles.Count >= 20) break;
+                if (!string.IsNullOrWhiteSpace(recent) && File.Exists(recent) &&
+                    !recentFiles.Contains(recent, StringComparer.OrdinalIgnoreCase))
+                    recentFiles.Add(recent);
+            }
             RefreshRecentMenu();
             foreach (var doc in state.Documents)
             {
                 doc.View = null; doc.Tab = null;
                 doc.Bookmarks ??= new HashSet<int>();
-                if (doc.Path != null && File.Exists(doc.Path) && !doc.Dirty)
+                doc.Buffer ??= string.Empty;
+                doc.Name ??= "Untitled";
+                doc.EncodingName ??= "utf-8";
+                if (doc.Newline != "\r\n" && doc.Newline != "\n" && doc.Newline != "\r") doc.Newline = "\r\n";
+                if (!float.IsFinite(doc.Zoom)) doc.Zoom = 1f;
+                doc.Zoom = Math.Clamp(doc.Zoom, 0.5f, 4f);
+                if (doc.Path != null)
                 {
-                    try { LoadFromDisk(doc); }
-                    catch (Exception) { doc.Dirty = true; }
+                    FileAvailability availability = DocumentSafety.Inspect(doc.Path);
+                    if (availability == FileAvailability.Present && !doc.Dirty && !doc.Closed)
+                    {
+                        try { LoadFromDisk(doc); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+                        {
+                            // No on-disk read should ever destroy the session snapshot.
+                            DocumentSafety.DetachToRecoveredBuffer(doc);
+                        }
+                    }
+                    else if (availability == FileAvailability.Missing)
+                    {
+                        if (doc.Closed) doc.MissingOnDisk = true;
+                        else DocumentSafety.DetachToRecoveredBuffer(doc);
+                    }
+                    else if (availability != FileAvailability.Present)
+                    {
+                        if (doc.Closed) doc.UnavailableOnDisk = true;
+                        else DocumentSafety.DetachToRecoveredBuffer(doc);
+                    }
+                    else if (!doc.Closed && doc.Dirty &&
+                             DocumentSafety.AssessSaveTarget(doc) == SaveTargetState.ModifiedExternally)
+                    {
+                        doc.ExternalConflict = true;
+                    }
                 }
-                else if (doc.Path != null && !File.Exists(doc.Path)) doc.Dirty = true;
+                if (doc.Path == null && doc.Buffer.Length > 0) doc.Dirty = true;
+                // A damaged session may refer to the same physical file in
+                // multiple document entries. Preserve every buffer, but never
+                // allow two tabs to silently save over the same path.
+                DocumentSafety.DetachIfDuplicate(doc, documents);
                 documents.Add(doc);
                 if (!doc.Closed) Activate(doc);
                 if (doc.Name.StartsWith("Untitled ", StringComparison.Ordinal) &&
@@ -91,30 +118,92 @@ public sealed partial class MainForm
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "The saved session could not be restored: " + ex.Message,
-                "Session recovery", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            string? backup = SessionFileStore.RescueCorruptSession(sessionPath);
+            if (backup == null) disableSessionWrites = true;
+            string note = backup == null
+                ? "A backup could not be made. Automatic session writes are disabled to protect the original file."
+                : "The original session was copied to:\n" + backup;
+            MessageBox.Show(this, "The saved session could not be restored: " + ex.Message +
+                "\n\n" + note, "Session recovery", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         finally { sessionLoading = false; }
     }
+
     private void CheckExternalChanges()
     {
         if (isClosing || !Visible || !Enabled) return;
-        foreach (var doc in documents.Where(x => !x.Closed && x.Path != null).ToArray())
+        bool changes = false;
+        foreach (var doc in documents.Where(x => x.Path != null).ToArray())
         {
+            var availability = DocumentSafety.Inspect(doc.Path);
+            if (doc.Closed)
+            {
+                bool missing = availability == FileAvailability.Missing;
+                bool inaccessible = availability is FileAvailability.Directory or FileAvailability.Inaccessible;
+                if (doc.MissingOnDisk != missing || doc.UnavailableOnDisk != inaccessible)
+                {
+                    doc.MissingOnDisk = missing;
+                    doc.UnavailableOnDisk = inaccessible;
+                    changes = true;
+                }
+                continue;
+            }
+            if (availability == FileAvailability.Missing)
+            {
+                if (!doc.MissingOnDisk)
+                {
+                    doc.MissingOnDisk = true;
+                    doc.UnavailableOnDisk = false;
+                    doc.Dirty = true;  // Protect cached text from being silently discarded.
+                    changes = true;
+                }
+                continue;
+            }
+            if (availability != FileAvailability.Present)
+            {
+                if (!doc.UnavailableOnDisk)
+                {
+                    doc.UnavailableOnDisk = true;
+                    changes = true;
+                }
+                continue;
+            }
+            bool reappeared = doc.MissingOnDisk;
+            if (doc.UnavailableOnDisk || reappeared)
+            {
+                doc.UnavailableOnDisk = false;
+                doc.MissingOnDisk = false;
+                doc.ExternalConflict = true;
+                doc.Dirty = true;
+                changes = true;
+            }
             try
             {
-                if (doc.Path == null || !File.Exists(doc.Path)) continue;
-                var info = new FileInfo(doc.Path);
-                if (info.LastWriteTimeUtc <= doc.WriteUtc && info.Length == doc.LastLength) continue;
-                // Remember the changed version if the user decides not to reload it.
-                doc.WriteUtc = info.LastWriteTimeUtc;
-                doc.LastLength = info.Length;
+                var (stamp, length) = DocumentSafety.Stamp(doc.Path!);
+                if (!reappeared && stamp == doc.WriteUtc && length == doc.LastLength)
+                {
+                    // Detect replacements that deliberately keep their length
+                    // and timestamp, without repeatedly hashing huge files.
+                    if (length > 8 * 1024 * 1024 ||
+                        DocumentSafety.AssessSaveTarget(doc) == SaveTargetState.Unmodified)
+                        continue;
+                }
+                // Do not show the same conflict message every four seconds.
+                if (!reappeared && stamp == doc.LastNotifiedWriteUtc &&
+                    length == doc.LastNotifiedLength) continue;
+                doc.LastNotifiedWriteUtc = stamp;
+                doc.LastNotifiedLength = length;
                 bool reload = MessageBox.Show(this,
-                    $"'{doc.Name}' was modified outside SourceCodeEditor.\n\n" +
-                    (doc.Dirty ? "Reloading will discard UNSAVED editor changes.\n\n" : "") +
-                    "Reload from disk now?", "External file change",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
-                if (!reload) continue;
+                    $"'{doc.Name}' {(reappeared ? "reappeared after being removed" : "changed outside SourceCodeEditor")}.\n\n" +
+                    "Reloading will replace the cached editor text.\n\nReload from disk now?",
+                    "External file change", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+                if (!reload)
+                {
+                    doc.ExternalConflict = true;
+                    doc.Dirty = true;
+                    changes = true;
+                    continue;
+                }
                 int at = doc.View?.Editor.SelectionStart ?? doc.Caret;
                 LoadFromDisk(doc);
                 if (doc.View != null)
@@ -127,11 +216,16 @@ public sealed partial class MainForm
                     }
                     finally { ignoreTextChanged = false; }
                 }
-                if (doc.Tab != null) doc.Tab.Text = doc.ToString();
-                RefreshDocumentTrees(); UpdateStatus();
+                changes = true;
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (IOException) { doc.UnavailableOnDisk = true; changes = true; }
+            catch (UnauthorizedAccessException) { doc.UnavailableOnDisk = true; changes = true; }
+        }
+        if (changes)
+        {
+            foreach (var doc in documents.Where(x => x.Tab != null))
+                doc.Tab!.Text = doc.ToString();
+            RefreshDocumentTrees(); UpdateStatus();
         }
     }
     private void OnMainFormClosing(object? sender, FormClosingEventArgs args)

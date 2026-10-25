@@ -1,4 +1,4 @@
-# SourceCodeEditor v0.5.1 — Windows x64
+# SourceCodeEditor v0.5.2 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -10,7 +10,49 @@ One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
 
-## New in 0.5.1: fix detached CMD and empty shell tab
+## New in 0.5.2: negative-testing and data-loss safeguards
+
+This release hardens the **existing** one-project application and retains the
+CSharpCodeDetective RTF-backed RichTextBox editor. It does not introduce a new
+solution, plugin system, or alternative editor backend.
+
+- **Closed Files entries are safe even if their file or parent directory has
+  been deleted, moved or made inaccessible.** The entry remains visible and is
+  labelled `[missing]` / `[inaccessible]` when detected. Double-click offers
+  to reopen its last cached text as `filename (Recovered)` in an **unsaved**
+  tab; the original path is removed from that document, so Save requires Save
+  As. Declining leaves the entry in Closed Files.
+- **Saving does not silently recreate deleted original files.** Active files
+  whose original has vanished also require Save As. File creation in a removed
+  parent directory is never attempted automatically.
+- **External overwrite conflicts:** saving checks modification time, length,
+  and SHA-256 of the original bytes. Even a change with the same timestamp and
+  length is detected. After a change, explicit Yes/No/Cancel is required to
+  overwrite, Save As, or abort. The file is checked again before the atomic
+  move. An unavoidable narrow race remains if another process replaces the
+  file after this check; concurrent multi-process transactions are not yet
+  implemented.
+- **Session recovery:** malformed JSON is copied to a dated `.corrupt_*.json`
+  file before the editor could replace it. If copying fails, automatic session
+  writes are disabled to protect the original. Dirty buffers, bookmarks,
+  encodings, source path of recovered files, and duplicate-path entries are
+  preserved. Duplicated paths are detached to recovered tabs.
+- **Explorer:** binary content is rejected even when renamed with `.txt` or
+  `.cs` extensions; hidden text files are still included. Missing directories,
+  protected folders, and deep symlink/junction chains are handled safely.
+- **Regression runner:** `--self-test-negative [REPORT.json]` executes **91
+  defined headless tests** in its own isolated temporary directories, using
+  the application's actual filesystem and serialization code. Run
+  `negative-smoke.ps1` after publishing; the Windows build script and CI will
+  block installer generation when these tests fail. See `NEGATIVE-TEST-MATRIX.md`.
+
+**Verification distinction:** The authoring environment is Linux without a
+.NET SDK or Windows. Offline source/fixture tests passed (see
+`tests/OFFLINE-CHECK-RESULTS.json`); the 91 native .NET scenarios, ConPTY test,
+WinForms UI, VS2022 compilation and installer still require execution on
+Windows. No verified installer binary is supplied in this source archive.
+
+## Introduced in 0.5.1: fix detached CMD and empty shell tab
 
 **Root cause fixed:** The ConPTY process attribute was created using
 `ref pseudoConsole` rather than the HPCON handle value. Unlike typical pointer

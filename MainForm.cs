@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Windows.Forms;
 
 namespace SourceCodeEditor;
@@ -365,7 +366,7 @@ public sealed partial class MainForm : Form
             AddRecentFile(path);
             Activate(d);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or InvalidDataException)
         {
             MessageBox.Show(this, ex.Message, "Unable to open file", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -381,10 +382,56 @@ public sealed partial class MainForm : Form
         var info = new FileInfo(d.Path);
         d.WriteUtc = info.LastWriteTimeUtc;
         d.LastLength = info.Length;
+        d.DiskHash = content.hash;
+        d.LastNotifiedWriteUtc = DateTime.MinValue;
+        d.LastNotifiedLength = 0;
         d.Dirty = false;
+        d.MissingOnDisk = false;
+        d.UnavailableOnDisk = false;
+        d.ExternalConflict = false;
     }
+    // A closed entry is a historical snapshot, not proof that the disk path
+    // still exists. Revalidate it whenever the user opens the entry.
+    private bool PrepareClosedDocument(EditorDocument d)
+    {
+        if (d.Path == null) return true;
+        var availability = DocumentSafety.Inspect(d.Path);
+        if (availability != FileAvailability.Present)
+        {
+            string original = d.Path;
+            string reason = availability == FileAvailability.Missing
+                ? "The file or one of its parent folders no longer exists."
+                : "The original file cannot be accessed as a regular file.";
+            if (MessageBox.Show(this, reason + "\n\n" + original +
+                "\n\nOpen the cached contents as an UNSAVED recovered document? " +
+                "Saving it will require Save As and will NOT recreate the removed folder automatically.",
+                "Reopen closed document", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return false;
+            DocumentSafety.DetachToRecoveredBuffer(d);
+            return true;
+        }
+        if (!d.Dirty)
+        {
+            try { LoadFromDisk(d); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+            {
+                if (MessageBox.Show(this, "The file could not be reloaded: " + ex.Message +
+                    "\n\nOpen its cached text as a recovered unsaved document?",
+                    "Reopen closed document", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    return false;
+                DocumentSafety.DetachToRecoveredBuffer(d);
+            }
+        }
+        else if (DocumentSafety.AssessSaveTarget(d) == SaveTargetState.ModifiedExternally)
+            d.ExternalConflict = true; // Keep the recovered/unsaved buffer.
+        d.MissingOnDisk = false;
+        d.UnavailableOnDisk = false;
+        return true;
+    }
+
     private void Activate(EditorDocument d)
     {
+        if (d.Closed && !PrepareClosedDocument(d)) return;
         if (d.Closed) d.Closed = false;
         if (d.Tab == null)
         {
@@ -431,26 +478,100 @@ public sealed partial class MainForm : Form
     private bool SaveDocument(EditorDocument? d, bool saveAs)
     {
         if (d == null) return false;
+        bool overwriteConfirmed = false;
+        (DateTime stamp, long length)? approvedVersion = null;
+        string? approvedHash = null;
         string? path = d.Path;
+        if (!saveAs && path != null)
+        {
+            var target = DocumentSafety.AssessSaveTarget(d);
+            if (target == SaveTargetState.Missing)
+            {
+                MessageBox.Show(this,
+                    "The original file or its folder has been removed.\n\n" + path +
+                    "\n\nSave As is required; the old path will not be silently recreated.",
+                    "Original file missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                saveAs = true;
+            }
+            else if (target == SaveTargetState.Unavailable)
+            {
+                MessageBox.Show(this, "The original path is inaccessible or no longer a file. " +
+                    "Choose Save As to store your text elsewhere.", "Save blocked",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            else if (target == SaveTargetState.ModifiedExternally)
+            {
+                var answer = MessageBox.Show(this,
+                    "This file has changed on disk since the current editor contents were loaded.\n\n" +
+                    path + "\n\nYes: explicitly overwrite the external version.\n" +
+                    "No: Save As another file.\nCancel: keep editing without saving.",
+                    "External file conflict", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+                if (answer == DialogResult.Cancel) return false;
+                if (answer == DialogResult.No) saveAs = true;
+                else
+                {
+                    try
+                    {
+                        approvedVersion = DocumentSafety.Stamp(path);
+                        approvedHash = DocumentSafety.HashDiskFile(path);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        MessageBox.Show(this, ex.Message, "File changed during save");
+                        return false;
+                    }
+                    overwriteConfirmed = true;
+                }
+            }
+        }
         if (saveAs || path == null)
         {
             using var dialog = new SaveFileDialog
             {
                 Filter = "All files (*.*)|*.*",
-                FileName = path == null ? d.Name + ".txt" : Path.GetFileName(path),
+                FileName = path == null ? d.Name.Replace(" (Recovered)", "") : Path.GetFileName(path),
+                InitialDirectory = DocumentSafety.SafeSaveDirectory(path ?? d.RecoverySourcePath, GetDocumentsDirectory()),
                 OverwritePrompt = true
             };
             if (dialog.ShowDialog(this) != DialogResult.OK) return false;
             path = dialog.FileName;
+            saveAs = true;
             if (documents.Any(other => !ReferenceEquals(other, d) && other.Path != null &&
                 string.Equals(other.Path, path, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(this, "This path is already open in another tab.", "Save As");
+                MessageBox.Show(this, "This path already belongs to another editor document.", "Save As");
                 return false;
             }
         }
         try
         {
+            // Repeat the availability/stamp check immediately before committing.
+            // A late change fails closed rather than deleting the other version.
+            if (!saveAs && d.Path != null)
+            {
+                var current = DocumentSafety.AssessSaveTarget(d);
+                if (current == SaveTargetState.Missing || current == SaveTargetState.Unavailable)
+                {
+                    MessageBox.Show(this, "The file disappeared or became inaccessible during Save. " +
+                        "The editor buffer is unchanged; use Save As.", "Save interrupted");
+                    return false;
+                }
+                if (current == SaveTargetState.ModifiedExternally && !overwriteConfirmed)
+                {
+                    MessageBox.Show(this, "The file changed again before it could be saved. " +
+                        "No data was overwritten.", "Save interrupted");
+                    return false;
+                }
+                if (overwriteConfirmed && approvedVersion != null &&
+                    (DocumentSafety.Stamp(path!) != approvedVersion.Value ||
+                     !string.Equals(DocumentSafety.HashDiskFile(path!), approvedHash, StringComparison.OrdinalIgnoreCase)))
+                {
+                    MessageBox.Show(this, "Another external change occurred after you approved overwrite. " +
+                        "No data was overwritten.", "Save interrupted");
+                    return false;
+                }
+            }
             string content = d.View?.Editor.Text ?? d.Buffer;
             var encoded = TextFiles.Encode(content, d.EncodingName, d.HasBom, d.Newline);
             TextFiles.WriteAtomic(path!, encoded);
@@ -458,9 +579,16 @@ public sealed partial class MainForm : Form
             d.Name = Path.GetFileName(path!);
             d.Dirty = false;
             d.Buffer = content;
+            d.MissingOnDisk = false;
+            d.UnavailableOnDisk = false;
+            d.ExternalConflict = false;
+            d.RecoverySourcePath = null;
             var info = new FileInfo(path!);
             d.WriteUtc = info.LastWriteTimeUtc;
             d.LastLength = info.Length;
+            d.DiskHash = Convert.ToHexString(SHA256.HashData(encoded));
+            d.LastNotifiedWriteUtc = DateTime.MinValue;
+            d.LastNotifiedLength = 0;
             if (d.View != null) d.View.DocumentFilePath = path!;
             if (d.Tab != null) { d.Tab.Text = d.ToString(); d.Tab.ToolTipText = path; }
             AddRecentFile(path!);
@@ -489,7 +617,8 @@ public sealed partial class MainForm : Form
             TextFiles.WriteAtomic(filename, TextFiles.Encode(d.View?.Editor.Text ?? d.Buffer, d.EncodingName, d.HasBom, d.Newline));
             MessageBox.Show(this, filename, "Backup saved");
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Backup failed"); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or EncoderFallbackException or NotSupportedException)
+        { MessageBox.Show(this, ex.Message, "Backup failed"); }
     }
     private bool ConfirmCanClose(EditorDocument d)
     {
@@ -500,11 +629,18 @@ public sealed partial class MainForm : Form
         if (result == DialogResult.Cancel) return false;
         if (result == DialogResult.Yes) return SaveDocument(d, false);
         // User selected "No": keep the on-disk version, not the discarded edits.
-        if (d.Path != null && File.Exists(d.Path))
+        if (d.Path != null && DocumentSafety.Inspect(d.Path) == FileAvailability.Present)
         {
-            try { LoadFromDisk(d); } catch (IOException) { d.Dirty = false; }
+            try { LoadFromDisk(d); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+            {
+                // The user explicitly chose Discard. Never let a deleted or
+                // unreadable disk file crash the tab-close / app-exit flow.
+                d.Dirty = false;
+                d.Buffer = string.Empty;
+            }
         }
-        else { d.Dirty = false; d.Buffer = ""; }
+        else { d.Dirty = false; d.Buffer = string.Empty; }
         return true;
     }
     private void CloseCurrent()
@@ -681,7 +817,10 @@ public sealed partial class MainForm : Form
         int line = editor.GetLineFromCharIndex(editor.SelectionStart);
         int beginning = editor.GetFirstCharIndexFromLine(line);
         int col = editor.SelectionStart - Math.Max(0, beginning) + 1;
-        caretStatus.Text = $"Ln {line + 1}, Col {col} | {editor.TextLength:N0} characters | {editor.Lines.Length:N0} lines";
+        caretStatus.Text = $"Ln {line + 1}, Col {col} | {editor.TextLength:N0} characters | {editor.Lines.Length:N0} lines" +
+            (d!.MissingOnDisk ? " | ORIGINAL MISSING - SAVE AS" :
+             d.UnavailableOnDisk ? " | FILE INACCESSIBLE" :
+             d.ExternalConflict ? " | DISK CONFLICT - REVIEW BEFORE SAVING" : "");
         encodingStatus.Text = d!.EncodingName.ToUpperInvariant() + (d.HasBom ? " BOM" : "");
         eolStatus.Text = d.Newline == "\r\n" ? "CRLF" : d.Newline == "\n" ? "LF" : "CR";
         zoomStatus.Text = $"{editor.ZoomFactor:P0}";

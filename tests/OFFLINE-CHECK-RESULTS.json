@@ -1,0 +1,269 @@
+{
+  "kind": "structural-and-filesystem-fixture (not compiled C#)",
+  "total": 65,
+  "passed": 65,
+  "failed": 0,
+  "distinct_headless_negative_tests_in_CSharp": 91,
+  "results": [
+    {
+      "name": "single-solution",
+      "status": "PASS"
+    },
+    {
+      "name": "single-project",
+      "status": "PASS"
+    },
+    {
+      "name": "explicit-includes",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:Program.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.FontSizing.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.Editing.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.Explorer.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.Shell.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:EmbeddedShellControl.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:WindowsPseudoConsole.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:ConPtySelfTest.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:TerminalScreen.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:TextSourceFileFilter.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:MainForm.Session.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:LineNumberedRichTextBox.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:DocumentModel.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:DocumentSafety.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:NegativeSelfTest.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:SearchDialog.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "source-exists:FindInFilesDialog.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "single-project-reference-in-solution",
+      "status": "PASS"
+    },
+    {
+      "name": "no-auto-compile",
+      "status": "PASS"
+    },
+    {
+      "name": "framework-net8-windows",
+      "status": "PASS"
+    },
+    {
+      "name": "x64-only-project",
+      "status": "PASS"
+    },
+    {
+      "name": "windows-build-workflow-present",
+      "status": "PASS"
+    },
+    {
+      "name": "negative-windows-runner-step",
+      "status": "PASS"
+    },
+    {
+      "name": "negative-windows-self-test-entrypoint",
+      "status": "PASS"
+    },
+    {
+      "name": "ConPTY-process-attachment",
+      "status": "PASS"
+    },
+    {
+      "name": "session-JSON-corruption-backup",
+      "status": "PASS"
+    },
+    {
+      "name": "missing-closed-file-recovery",
+      "status": "PASS"
+    },
+    {
+      "name": "missing-file-save-as",
+      "status": "PASS"
+    },
+    {
+      "name": "external-modification-conflict",
+      "status": "PASS"
+    },
+    {
+      "name": "disk-fingerprint",
+      "status": "PASS"
+    },
+    {
+      "name": "atomic-file-write",
+      "status": "PASS"
+    },
+    {
+      "name": "explorer-shows-hidden",
+      "status": "PASS"
+    },
+    {
+      "name": "explorer-always-starts-Documents",
+      "status": "PASS"
+    },
+    {
+      "name": "four-navigation-tabs",
+      "status": "PASS"
+    },
+    {
+      "name": "upstream-RTF-editor-preserved",
+      "status": "PASS"
+    },
+    {
+      "name": "installer-present",
+      "status": "PASS"
+    },
+    {
+      "name": "Windows-PowerShell-test-harness",
+      "status": "PASS"
+    },
+    {
+      "name": "at-least-70-negative-scenarios",
+      "status": "PASS"
+    },
+    {
+      "name": "distinct-negative-test-names",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.Session.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:DocumentSafety.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:Program.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:NegativeSelfTest.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:DocumentModel.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:FindInFilesDialog.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:LineNumberedRichTextBox.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:TerminalScreen.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:ConPtySelfTest.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.FontSizing.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:TextSourceFileFilter.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.Shell.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:WindowsPseudoConsole.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:SearchDialog.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.Editing.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:EmbeddedShellControl.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "balanced-delimiters:MainForm.Explorer.cs",
+      "status": "PASS"
+    },
+    {
+      "name": "fixture-deleted-folder-and-cached-buffer",
+      "status": "PASS"
+    },
+    {
+      "name": "fixture-folder-rename-invalidates-old-path",
+      "status": "PASS"
+    },
+    {
+      "name": "fixture-rewrite-same-size-and-timestamp",
+      "status": "PASS"
+    },
+    {
+      "name": "fixture-hidden-text-file-detected",
+      "status": "PASS"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# SourceCodeEditor 0.5.1 — Windows x64 smoke-test checklist
+# SourceCodeEditor 0.5.2 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
 for Visual Studio 2022 / Windows 10 or Windows 11 x64.
@@ -62,7 +62,7 @@ for Visual Studio 2022 / Windows 10 or Windows 11 x64.
 12g. Close a running `ping -t` shell tab. Confirm child processes and pipe
     handles are released and the UI doesn't hang.
 
-## ConPTY attachment regression (0.5.1)
+## ConPTY attachment regression (0.5.2)
 
 The v0.5.0 implementation mistakenly passed `ref pseudoConsole` to
 `UpdateProcThreadAttribute` and thereby passed an HPCON pointer instead of the
@@ -111,3 +111,14 @@ accepts `IntPtr` for `lpValue`, and receives the pseudoconsole handle directly.
     Verify restored application/editor font sizes and 12 pt reset commands.
 22. Open Find and Replace/Find in Files dialogs; verify application font scaling
     while dialog controls remain usable. Verify no resize or startup exception.
+
+## New in 0.5.2 — file-loss negative paths
+
+See `NEGATIVE-TEST-MATRIX.md` for the extensive matrix. Mandatory targeted
+manual checks: close a cached file and delete its parent folder; re-open via
+Closed Files, choose No (must remain listed), choose Yes (must open as Unsaved
+Recovered), then cancel Save As (buffer must remain) and save to an existing
+folder (must not recreate the removed directory). Repeat with an empty file,
+missing drive, moved file, file replaced by directory, an exclusive-lock file,
+changes with identical size/timestamps, malformed session JSON, and multiple
+simultaneous shells. Run `negative-smoke.ps1` before each installer build.

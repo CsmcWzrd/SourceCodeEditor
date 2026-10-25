@@ -9,7 +9,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
     <AssemblyName>SourceCodeEditor</AssemblyName>
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <RootNamespace>SourceCodeEditor</RootNamespace>
     <ApplicationIcon>SourceCodeEditor.ico</ApplicationIcon>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -29,6 +29,8 @@
     <Compile Include="MainForm.Session.cs" />
     <Compile Include="LineNumberedRichTextBox.cs" />
     <Compile Include="DocumentModel.cs" />
+    <Compile Include="DocumentSafety.cs" />
+    <Compile Include="NegativeSelfTest.cs" />
     <Compile Include="SearchDialog.cs" />
     <Compile Include="FindInFilesDialog.cs" />
   </ItemGroup>

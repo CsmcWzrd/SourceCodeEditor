@@ -115,7 +115,11 @@ public sealed partial class MainForm
         explorerMenu.Items.Add("Go to parent folder", null, (_, _) =>
         {
             string current = GetExplorerSelectedFolder();
-            NavigateExplorer(Directory.GetParent(current)?.FullName ?? current);
+            try { NavigateExplorer(Directory.GetParent(current)?.FullName ?? current); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                MessageBox.Show(this, ex.Message, "Go to parent folder");
+            }
         });
         explorer.ContextMenuStrip = explorerMenu;
 
@@ -160,6 +164,7 @@ public sealed partial class MainForm
                         label += " (" + drive.VolumeLabel + ")";
                 }
                 catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
                 var node = MakeExplorerNode(drive.Name, true, label);
                 explorer.Nodes.Add(node);
             }
@@ -190,6 +195,15 @@ public sealed partial class MainForm
         if (node.Tag is not ExplorerItem { IsFolder: true } folder || folder.Loaded) return;
         folder.Loaded = true;
         node.Nodes.Clear();
+        // Junctions and symlinks may form cyclic directory graphs. Restrict
+        // manual expansion depth instead of recursively following indefinitely.
+        int depth = 0;
+        for (TreeNode? parent = node.Parent; parent != null; parent = parent.Parent) depth++;
+        if (depth >= 80)
+        {
+            node.Nodes.Add(new TreeNode("[Maximum explorer depth reached]"));
+            return;
+        }
         try
         {
             var options = new EnumerationOptions
@@ -247,6 +261,7 @@ public sealed partial class MainForm
                 return;
             }
             TreeNode current = drive;
+            bool reached = true;
             string relative = Path.GetRelativePath(driveRoot!, folder);
             var parts = relative == "." ? Array.Empty<string>() :
                 relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
@@ -257,7 +272,11 @@ public sealed partial class MainForm
                 var next = current.Nodes.Cast<TreeNode>().FirstOrDefault(n =>
                     n.Tag is ExplorerItem entry && entry.IsFolder &&
                     string.Equals(n.Text, part, StringComparison.OrdinalIgnoreCase));
-                if (next == null) break; // A protected folder can be inaccessible.
+                if (next == null)
+                {
+                    reached = false; // Folder disappeared or access was denied.
+                    break;
+                }
                 current = next;
             }
             if (isFile)
@@ -271,9 +290,15 @@ public sealed partial class MainForm
             }
             explorer.SelectedNode = current;
             current.EnsureVisible();
-            explorerRoot = folder;
-            explorerAddress.Text = folder;
+            explorerRoot = reached ? folder :
+                ((current.Tag as ExplorerItem)?.IsFolder == true ?
+                    ((ExplorerItem)current.Tag!).Path : GetDocumentsDirectory());
+            explorerAddress.Text = explorerRoot;
             navigation.SelectedIndex = 0;
+            if (!reached)
+                MessageBox.Show(this, "Navigation stopped at the nearest accessible folder. " +
+                    "A component of the selected path was removed, protected, or no longer available.",
+                    "File Explorer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {

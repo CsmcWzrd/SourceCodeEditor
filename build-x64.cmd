@@ -10,6 +10,13 @@ if errorlevel 1 exit /b 1
 dotnet publish "SourceCodeEditor.csproj" -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableWindowsTargeting=true -o "dist\win-x64"
 if errorlevel 1 exit /b 1
 
+echo === Running destructive negative tests in isolated TEMP folders ===
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "negative-smoke.ps1"
+if errorlevel 1 (
+    echo ERROR: Negative regression suite failed - installer not generated.
+    exit /b 1
+)
+
 set "ISCC_PATH=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if exist "%ISCC_PATH%" goto found_inno
 where iscc >nul 2>nul

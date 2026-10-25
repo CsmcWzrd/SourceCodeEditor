@@ -25,12 +25,20 @@ public sealed partial class MainForm
         drives.DropDownOpening += (_, _) =>
         {
             drives.DropDownItems.Clear();
-            foreach (var drive in DriveInfo.GetDrives().OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+            try
             {
-                string folder = drive.Name;
-                var item = new ToolStripMenuItem(folder) { Enabled = Directory.Exists(folder) };
-                item.Click += (_, _) => OpenEmbeddedShell(folder);
-                drives.DropDownItems.Add(item);
+                foreach (var drive in DriveInfo.GetDrives().OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    string folder = drive.Name;
+                    var item = new ToolStripMenuItem(folder) { Enabled = Directory.Exists(folder) };
+                    item.Click += (_, _) => OpenEmbeddedShell(folder);
+                    drives.DropDownItems.Add(item);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                drives.DropDownItems.Add(new ToolStripMenuItem("Drive enumeration unavailable: " + ex.Message)
+                { Enabled = false });
             }
             if (drives.DropDownItems.Count == 0)
                 drives.DropDownItems.Add(new ToolStripMenuItem("No drives found") { Enabled = false });

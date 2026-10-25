@@ -44,10 +44,10 @@ internal static class TextSourceFileFilter
     {
         try
         {
-            string name = Path.GetFileName(path);
-            if (Extensions.Contains(Path.GetExtension(name)) || KnownTextNames.Contains(name)) return true;
-            // Dotfiles and unknown extensions can also be ordinary text. Avoid
-            // hiding those by inspecting a small prefix rather than blacklisting.
+            // Even files with .cs/.txt source extensions may actually contain
+            // a renamed executable or binary attachment. Probe every file,
+            // including known source extensions, before showing it.
+            // Dotfiles and extensionless text are also eligible.
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete, bufferSize: 4096, FileOptions.SequentialScan);
             Span<byte> bytes = stackalloc byte[4096];
@@ -72,7 +72,8 @@ internal static class TextSourceFileFilter
                 if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D && b != 0x0C && b != 0x08)
                     unusual++;
             }
-            return unusual * 100 < length * 2;
+            bool knownText = Extensions.Contains(Path.GetExtension(path)) || KnownTextNames.Contains(Path.GetFileName(path));
+            return unusual * 100 < length * (knownText ? 2 : 1);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
