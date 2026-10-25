@@ -1,5 +1,5 @@
 #define AppName "SourceCodeEditor"
-#define AppVersion "0.5.5"
+#define AppVersion "0.5.6"
 [Setup]
 AppId={{2D26E54C-A46D-42A3-914A-2C665EE8CE14}
 AppName={#AppName}
@@ -14,6 +14,7 @@ ArchitecturesInstallIn64BitMode=x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=SourceCodeEditor.ico
 UninstallDisplayIcon={app}\SourceCodeEditor.exe
 LicenseFile=LICENSE-upstream.txt
 [Files]

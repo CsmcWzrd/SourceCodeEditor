@@ -1,3 +1,7 @@
+# SourceCodeEditor v0.5.6 — Application icon update
+
+The application now has a notepad-shaped icon with a prominent centered asterisk. The generated `SourceCodeEditor.ico` includes 10 sizes from 16 to 256 pixels. The executable uses it through `<ApplicationIcon>`, MainForm uses the executable icon, and Inno Setup uses it through `SetupIconFile`. A full-size icon preview is included as `SourceCodeEditor-icon-preview.png`. Source/layout/features unchanged from v0.5.5. Windows build/runtime testing not performed here.
+
 > **v0.5.5 build hotfix:** Corrects the invalid `MonospacedFontCatalog.cs` initializer which produced CS1003, CS1002, and CS0103. See `RELEASE-TEST-REPORT-v055.md`.
 
 # SourceCodeEditor v0.5.4 — Windows x64
