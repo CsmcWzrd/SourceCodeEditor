@@ -61,7 +61,7 @@ public sealed partial class MainForm
             string title = "CMD: " + (string.IsNullOrWhiteSpace(leaf) ? folder : leaf);
             var tab = new TabPage(title)
             {
-                Padding = Padding.Empty, ToolTipText = "cmd.exe in " + folder
+                Padding = Padding.Empty, ToolTipText = "Interactive Windows ConPTY terminal: " + folder
             };
             var shell = new EmbeddedShellControl(folder);
             shell.ApplyInterfaceFont(applicationFontPoints);

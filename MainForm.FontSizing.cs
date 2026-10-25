@@ -34,6 +34,8 @@ public sealed partial class MainForm
         {
             Font = uiFont;
             navigation.Font = uiFont;
+            // Four tabs in a predictable two-by-two layout at the default font.
+            navigation.ItemSize = new Size(116, Math.Max(30, uiFont.Height + 10));
             editors.Font = uiFont;
             editors.Padding = new Point(Math.Max(20, uiFont.Height + 2), Math.Max(7, uiFont.Height / 4));
             if (MainMenuStrip != null) MainMenuStrip.Font = uiFont;

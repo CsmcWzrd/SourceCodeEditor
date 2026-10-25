@@ -1,4 +1,4 @@
-# Windows x64 build — SourceCodeEditor 0.4.1
+# Windows x64 build — SourceCodeEditor 0.5.0
 
 This project contains exactly one solution (`SourceCodeEditor.sln`) and one
 project (`SourceCodeEditor.csproj`). It explicitly lists compiled source files
@@ -14,3 +14,10 @@ to avoid duplicate generated assembly attributes when copying folders.
 
 No Windows compilation or GUI test was available in the authoring environment.
 The package contains source plus build/installer scripts, not a compiled EXE.
+
+## Terminal requirement
+
+The interactive shell uses native Windows ConPTY (Windows 10 version 1809+
+and Windows 11). The shell is part of the WinForms project, not a NuGet
+terminal package. Test the ConPTY interop and key bindings on Windows with
+`SMOKE-TESTS.md` before distributing the installer.

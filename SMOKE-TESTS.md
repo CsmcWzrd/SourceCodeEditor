@@ -1,4 +1,4 @@
-# SourceCodeEditor 0.4.1 — Windows x64 smoke-test checklist
+# SourceCodeEditor 0.5.0 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
 for Visual Studio 2022 / Windows 10 or Windows 11 x64.
@@ -40,7 +40,27 @@ for Visual Studio 2022 / Windows 10 or Windows 11 x64.
     the associated subprocess is terminated. Verify it does not close editor
     document tabs or discard their unsaved edits. Try two CMD tabs concurrently.
 12. Try a command producing many output lines; the UI must remain responsive.
-    Full-screen console tools are not supported by the stream-based terminal.
+    The terminal must retain correct prompt placement and scrollback. Test
+    Ctrl+C interrupt and CMD keyboard navigation. Complex TUIs need separate
+    acceptance tests because the VT renderer is not yet feature complete.
+
+## ConPTY visual and interactivity regression
+
+12a. The CMD tab must have **no separate bottom input box** and **no embedded
+    top toolbar**. The terminal prompt and typed text must share one continuous
+    black console surface; tabs and application status bar remain outside it.
+12b. Run `echo hello`, `dir`, `cd`, `cls`, `set /p name=Name:`, then type a value.
+    Confirm echo, line editing, prompt rendering and clear-screen semantics.
+12c. Run `ping -t 127.0.0.1` and press Ctrl+C; verify it interrupts. Use Up
+    arrow to recall commands, then type Backspace and execute the edited command.
+12d. Paste a command using Ctrl+V, select text with mouse, copy with
+    Ctrl+Shift+C, and scroll backwards with mouse wheel.
+12e. Resize the main window and splitter and change the application font.
+    Check the console automatically reflows and the cursor remains visible.
+12f. Run `powershell -NoLogo`, execute `Write-Host Test -ForegroundColor Cyan`,
+    exit and confirm colors and prompt are rendered. Repeat with two tabs.
+12g. Close a running `ping -t` shell tab. Confirm child processes and pipe
+    handles are released and the UI doesn't hang.
 
 ## Existing editor regression
 

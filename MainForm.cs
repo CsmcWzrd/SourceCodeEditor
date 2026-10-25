@@ -21,8 +21,9 @@ public sealed partial class MainForm : Form
     };
     private readonly TabControl navigation = new()
     {
-        Dock = DockStyle.Fill, Multiline = true, SizeMode = TabSizeMode.Normal,
-        Padding = new Point(5, 4), Font = new Font("Segoe UI", 12f)
+        Dock = DockStyle.Fill, Multiline = true, SizeMode = TabSizeMode.Fixed,
+        ItemSize = new Size(116, 31), Padding = new Point(2, 4),
+        Font = new Font("Segoe UI", 12f)
     };
     private readonly TreeView opened = MakeDocumentTree();
     private readonly TreeView closed = MakeDocumentTree();
@@ -59,7 +60,7 @@ public sealed partial class MainForm : Form
     private FormWindowState normalState;
     private SearchDialog? searchWindow;
     private readonly List<string> recentFiles = new();
-    private int preferredLeftWidth = 216;
+    private int preferredLeftWidth = 252;
     private ToolStripMenuItem? recentMenu;
 
     public MainForm(string[] args)
@@ -177,9 +178,9 @@ public sealed partial class MainForm : Form
         if (available < 500) return;
         // Set a safe distance BEFORE applying minimums, so each subsequent
         // WinForms validation sees a legal interval (including on HiDPI).
-        int target = Math.Clamp(preferredLeftWidth, 160, available - 340);
+        int target = Math.Clamp(preferredLeftWidth, 242, available - 340);
         split.SplitterDistance = target;
-        split.Panel1MinSize = 160;
+        split.Panel1MinSize = 242;
         split.Panel2MinSize = 340;
         navigation.SelectedIndex = Math.Clamp(navigation.SelectedIndex, 0, navigation.TabPages.Count - 1);
     }

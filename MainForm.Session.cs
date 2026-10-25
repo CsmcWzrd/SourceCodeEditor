@@ -27,7 +27,7 @@ public sealed partial class MainForm
                 ActiveDocument = Math.Max(0, documents.IndexOf(CurrentDocument()!)),
                 ExplorerRoot = explorerRoot,
                 NavigationIndex = navigation.SelectedIndex,
-                LeftWidth = split.Panel1Collapsed ? 216 : split.SplitterDistance,
+                LeftWidth = split.Panel1Collapsed ? 252 : split.SplitterDistance,
                 ApplicationFontPoints = applicationFontPoints,
                 EditorFontPoints = editorFontPoints,
                 RecentFiles = recentFiles.ToList()
@@ -59,7 +59,7 @@ public sealed partial class MainForm
                 state = JsonSerializer.Deserialize<EditorSession>(json);
             if (state == null) return;
             // Do not restore the old explorer path: every launch starts in Documents.
-            preferredLeftWidth = Math.Clamp(state.LeftWidth, 160, 320);
+            preferredLeftWidth = Math.Clamp(state.LeftWidth, 242, 320);
             // Restore font sizes BEFORE constructing recovered editor views.
             SetApplicationFontSize(state.ApplicationFontPoints, false);
             SetEditorFontSize(state.EditorFontPoints, false);

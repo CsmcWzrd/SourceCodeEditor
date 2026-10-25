@@ -1,4 +1,4 @@
-# SourceCodeEditor v0.4.1 — Windows x64
+# SourceCodeEditor v0.5.0 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -10,7 +10,37 @@ One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
 
-## New in 0.4.1: application and RTF editor fonts
+## New in 0.5.0: interactive Windows ConPTY terminal tabs
+
+The old shell widget used redirected standard input/output, a large toolbar,
+readonly transcript and a separate command-entry box. This was **not a terminal**
+and did not even display CMD's interactive prompt correctly. The code has been
+replaced with three self-contained C# files:
+
+- `WindowsPseudoConsole.cs` starts `cmd.exe /D` using the Windows ConPTY API,
+  attaches it via STARTUPINFOEX, and communicates using dedicated input/output
+  worker threads, with UTF-8/VT output and dynamic console resizing.
+- `TerminalScreen.cs` parses output into a terminal character-cell grid,
+  including cursor positioning, clear commands, scrollback, ANSI 16/256/true
+  color, and alternate-screen mode.
+- `EmbeddedShellControl.cs` owns a single keyboard-enabled terminal canvas;
+  text and cursor appear at the same location, as in a terminal. There is no
+  separate output panel, prompt field, or oversized shell toolbar.
+
+Features: native CMD prompt and echo, `dir`, `cd`, `cls`, interactive console
+input, Ctrl+C interrupts, arrow keys, scrolling, mouse text selection, copy
+(Ctrl+Shift+C), paste (Ctrl+Shift+V or Ctrl+V), terminal zoom with Ctrl+wheel,
+multiple independent tabs and x64 Windows support. Right-click in the terminal
+to copy, paste, copy the visible screen, or clear it. Closing a shell tab
+releases the pseudo console and ends its process tree.
+
+**Compatibility:** ConPTY requires Windows 10 version 1809+ / Windows 11.
+This compact terminal implements common VT/xterm sequences, but is **not** a
+complete Windows Terminal replacement. Complex TUIs requiring advanced mouse
+protocols, Unicode grapheme-width processing, or all ANSI extensions may not
+render perfectly. Windows runtime testing is still pending in this environment.
+
+## Introduced in 0.4.1: application and RTF editor fonts
 
 Both the **File Explorer** and the **RTF source editor** start at **12 pt** on a
 fresh installation. Under **View** there are two independent submenus:
@@ -77,17 +107,11 @@ Use the **Shell** top-level menu:
 The file explorer right-click menu also contains **Open shell here (embedded tab)**.
 Every action opens an independent, closable **CMD** tab **within the same right
 editor tab control**, not a separate console window. Multiple shell tabs are
-supported. The embedded shell uses a persistent `cmd.exe /Q /D` subprocess with
-redirected standard input, output and error; its starting working directory is
-the selected path, and `cd` commands keep their context within that process.
-The bottom input field accepts commands, with Enter to execute and Up/Down for
-command history. Output can be selected/copied. Tabs are closed using ×, middle
-click, Ctrl+W or the context menu. Closing a shell disposes its subprocess.
+supported, each with its own real CMD working directory and interactive prompt.
+The replacement shell uses ConPTY rather than redirected, line-based stdio,
+and inputs are typed directly into the terminal view at the cursor. Close tabs
+using ×, middle click, Ctrl+W or the tab context menu.
 
-**Terminal limitations:** This is a stream-based embedded command shell, not a
-Win32 ConPTY/VT terminal emulator. Shell built-ins and ordinary noninteractive
-CLI programs work, but console-dependent full-screen tools, advanced ANSI/VT
-rendering, signal handling and interactive password prompts are not supported.
 Shell tabs are not restored after restart, and commands are not recorded in the
 session file. Do not paste commands you do not trust.
 
@@ -125,8 +149,8 @@ run have **not** been verified. The ZIP contains source and an installer
 
 ## Remaining Notepad++ differences
 
-No code folding, multi-caret/column editing, fully interactive terminal/ConPTY,
-macros, or large-file incremental engine. This project does **not** include
+No code folding, multi-caret/column editing, complete Windows Terminal VT protocol
+coverage, macros, or large-file incremental engine. This project does **not** include
 plugins, as requested. Syntax formatting is performed in an RTF-backed
 RichTextBox control; text files are saved as source text rather than RTF.
 
