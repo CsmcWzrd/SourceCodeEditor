@@ -1,4 +1,4 @@
-# SourceCodeEditor v0.4.0 — Windows x64
+# SourceCodeEditor v0.4.1 — Windows x64
 
 SourceCodeEditor is a C# WinForms editor using the **CSharpCodeDetective**
 `LineNumberedRichTextBox` RichTextBox/RTF-based syntax highlighting implementation.
@@ -10,7 +10,28 @@ One Visual Studio 2022 solution (`SourceCodeEditor.sln`), one project
 (`SourceCodeEditor.csproj`), **all source inside the top-level `SourceCodeEditor/`
 folder**, and Windows x64 / .NET 8 target. No plugin system.
 
-## New in 0.4.0: custom drive explorer
+## New in 0.4.1: application and RTF editor fonts
+
+Both the **File Explorer** and the **RTF source editor** start at **12 pt** on a
+fresh installation. Under **View** there are two independent submenus:
+
+- **Application Font (12 pt)** > Increase Application Font (+1 pt), Decrease
+  Application Font (-1 pt), Reset Application Font (12 pt). Applies to menus,
+  four navigator tabs, explorer and file trees, document tabs, status-bar UI,
+  search dialogs, and the embedded CMD user interface.
+- **RTF Editor Font (12 pt)** > Increase Editor Font (+1 pt), Decrease Editor
+  Font (-1 pt), Reset Editor Font (12 pt). Applies to all open RTF editor
+  documents, preserving selection, syntax colors, and the line-number gutter.
+  Newly opened/recovered documents use the same base font.
+
+Font sizes change in whole 1 pt steps, bounded to 8–32 pt. The two selected
+font sizes are saved in the existing session file and restored after relaunch.
+Previously saved sessions without these properties default to 12 pt.
+Ctrl+mouse-wheel and **View > Zoom** continue to act on the active document
+and do not change the base font settings. The gutter automatically measures
+its width and font against the effective (base x zoom) text size.
+
+## Introduced in 0.4.0: custom drive explorer
 
 The **File Explorer** navigation tab is an **in-process TreeView** backed by
 `System.IO`; it does **not** embed or launch Windows Explorer. It always shows
@@ -40,7 +61,7 @@ The full navigation bar still contains these four tabs, in order:
 
 The right pane still has closable tabs for individual source/text documents.
 
-## New in 0.4.0: shell tabs
+## Introduced in 0.4.0: shell tabs
 
 Use the **Shell** top-level menu:
 

@@ -1,4 +1,4 @@
-# Windows x64 build — SourceCodeEditor 0.4.0
+# Windows x64 build — SourceCodeEditor 0.4.1
 
 This project contains exactly one solution (`SourceCodeEditor.sln`) and one
 project (`SourceCodeEditor.csproj`). It explicitly lists compiled source files

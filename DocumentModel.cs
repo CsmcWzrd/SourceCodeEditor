@@ -36,6 +36,8 @@ internal sealed class EditorSession
     public string ExplorerRoot { get; set; } = "";
     public int NavigationIndex { get; set; }
     public int LeftWidth { get; set; } = 216;
+    public float ApplicationFontPoints { get; set; } = 12f;
+    public float EditorFontPoints { get; set; } = 12f;
     public List<string> RecentFiles { get; set; } = new();
 }
 

@@ -22,6 +22,7 @@ internal sealed class SearchDialog : Form
         GridLines = true, HideSelection = false
     };
     private readonly Label feedback = new() { Text = "", AutoSize = true };
+    private TableLayoutPanel? fontLayout;
 
     public SearchDialog(Func<RichTextBox?> getActive)
     {
@@ -31,11 +32,14 @@ internal sealed class SearchDialog : Form
         MinimumSize = new Size(550, 340);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.SizableToolWindow;
+        Font = new Font("Segoe UI", 12f);
+        AutoScaleMode = AutoScaleMode.Font;
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6,
             Padding = new Padding(10)
         };
+        fontLayout = layout;
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
@@ -72,6 +76,22 @@ internal sealed class SearchDialog : Form
         Controls.Add(layout);
         find.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; FindNext(); } };
     }
+    public void SetInterfaceFont(Font uiFont)
+    {
+        Font = uiFont;
+        if (fontLayout != null)
+        {
+            fontLayout.ColumnStyles[0].Width = Math.Max(85, uiFont.Height * 5);
+            int row = Math.Max(30, uiFont.Height + 12);
+            fontLayout.RowStyles[0].Height = row;
+            fontLayout.RowStyles[1].Height = row;
+            fontLayout.RowStyles[2].Height = Math.Max(34, uiFont.Height + 12);
+            fontLayout.RowStyles[3].Height = Math.Max(38, uiFont.Height + 14);
+            fontLayout.RowStyles[5].Height = Math.Max(25, uiFont.Height + 5);
+            fontLayout.PerformLayout();
+        }
+    }
+
     private static void AddButton(FlowLayoutPanel owner, string title, Action action)
     {
         var button = new Button { Text = title, AutoSize = true, Height = 28, Margin = new Padding(0, 0, 6, 0) };

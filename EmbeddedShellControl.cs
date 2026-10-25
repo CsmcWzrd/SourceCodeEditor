@@ -32,6 +32,8 @@ public sealed class EmbeddedShellControl : UserControl
         BorderStyle = BorderStyle.FixedSingle
     };
     private readonly ToolStripStatusLabel shellState = new("Starting...");
+    private TableLayoutPanel? shellLayout;
+    private ToolStrip? shellToolbar;
     private readonly List<string> commandHistory = new();
     private readonly ConcurrentQueue<string> pendingOutput = new();
     private readonly System.Windows.Forms.Timer outputDrainTimer = new() { Interval = 75 };
@@ -96,9 +98,28 @@ public sealed class EmbeddedShellControl : UserControl
         root.Controls.Add(output, 0, 1);
         root.Controls.Add(inputPanel, 0, 2);
         Controls.Add(root);
+        shellLayout = root;
+        shellToolbar = header;
+        ApplyInterfaceFont(12f);
         AppendOutput("Embedded Windows Command Prompt — " + InitialDirectory + Environment.NewLine);
         AppendOutput("Commands run in a persistent cmd.exe process. Type 'exit' to end it." + Environment.NewLine);
         AppendOutput("Note: full-screen console applications need a ConPTY terminal and are not supported here." + Environment.NewLine + Environment.NewLine);
+    }
+
+    /// <summary>Apply the application UI font size to the embedded shell tab.</summary>
+    public void ApplyInterfaceFont(float points)
+    {
+        points = Math.Clamp(points, 8f, 32f);
+        Font = new Font("Segoe UI", points, FontStyle.Regular, GraphicsUnit.Point);
+        if (shellToolbar != null) shellToolbar.Font = Font;
+        output.Font = new Font("Consolas", points, FontStyle.Regular, GraphicsUnit.Point);
+        input.Font = new Font("Consolas", points, FontStyle.Regular, GraphicsUnit.Point);
+        if (shellLayout != null)
+        {
+            shellLayout.RowStyles[0].Height = Math.Max(27, Font.Height + 10);
+            shellLayout.RowStyles[2].Height = Math.Max(31, input.Font.Height + 12);
+        }
+        PerformLayout();
     }
 
     public void StartShell()

@@ -38,7 +38,7 @@ public sealed class LineNumberedRichTextBox : UserControl
     public ZoomRichTextBox Editor { get; } = new()
     {
         Dock = DockStyle.Fill,
-        Font = new Font("Consolas", 10.5f),
+        Font = new Font("Consolas", 12f, FontStyle.Regular, GraphicsUnit.Point),
         WordWrap = false,
         AcceptsTab = true,
         HideSelection = false,
@@ -84,6 +84,36 @@ public sealed class LineNumberedRichTextBox : UserControl
         Editor.FontChanged += (_, _) => QueueGutterRefresh();
         Editor.KeyUp += (_, _) => QueueGutterRefresh();
         Editor.MouseUp += (_, _) => QueueGutterRefresh();
+    }
+
+    /// <summary>
+    /// Set the base editor font (separate from per-document zoom).
+    /// Preserve RTF syntax token colors by changing only the selection font;
+    /// the caller suppresses document-change tracking during this operation.
+    /// </summary>
+    public void SetBaseFontSize(float points)
+    {
+        if (IsDisposed || Editor.IsDisposed) return;
+        points = Math.Clamp(points, 8f, 32f);
+        if (Math.Abs(Editor.Font.SizeInPoints - points) < 0.01f) return;
+        int start = Editor.SelectionStart;
+        int length = Editor.SelectionLength;
+        float zoom = Editor.ZoomFactor;
+        using (new RedrawScope(Editor))
+        {
+            Editor.Font = new Font("Consolas", points, FontStyle.Regular, GraphicsUnit.Point);
+            if (Editor.TextLength > 0)
+            {
+                Editor.SelectAll();
+                Editor.SelectionFont = Editor.Font;
+                Editor.Select(Math.Min(start, Editor.TextLength),
+                    Math.Min(length, Math.Max(0, Editor.TextLength - start)));
+            }
+            // Changing RichEdit font must not reset the per-document zoom.
+            if (Math.Abs(Editor.ZoomFactor - zoom) > 0.001f)
+                Editor.ZoomFactor = zoom;
+        }
+        QueueGutterRefresh();
     }
 
     public void LoadText(string text, string filePath)

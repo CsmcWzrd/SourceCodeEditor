@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="MainForm.cs" />
+    <Compile Include="MainForm.FontSizing.cs" />
     <Compile Include="MainForm.Editing.cs" />
     <Compile Include="MainForm.Explorer.cs" />
     <Compile Include="MainForm.Shell.cs" />

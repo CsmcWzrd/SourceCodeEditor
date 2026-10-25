@@ -119,6 +119,8 @@ public sealed partial class MainForm
         });
         explorer.ContextMenuStrip = explorerMenu;
 
+        explorerLayout = layout;
+        explorerToolbar = toolbar;
         layout.Controls.Add(toolbar, 0, 0);
         layout.Controls.Add(explorerAddress, 0, 1);
         layout.Controls.Add(explorer, 0, 2);

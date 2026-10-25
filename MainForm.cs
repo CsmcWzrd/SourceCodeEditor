@@ -22,7 +22,7 @@ public sealed partial class MainForm : Form
     private readonly TabControl navigation = new()
     {
         Dock = DockStyle.Fill, Multiline = true, SizeMode = TabSizeMode.Normal,
-        Padding = new Point(5, 4), Font = new Font("Segoe UI", 8.5f)
+        Padding = new Point(5, 4), Font = new Font("Segoe UI", 12f)
     };
     private readonly TreeView opened = MakeDocumentTree();
     private readonly TreeView closed = MakeDocumentTree();
@@ -69,6 +69,7 @@ public sealed partial class MainForm : Form
         MinimumSize = new Size(820, 500);
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
+        Font = new Font("Segoe UI", DefaultFontPoints, FontStyle.Regular, GraphicsUnit.Point);
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 
         AllowDrop = true;
@@ -153,6 +154,8 @@ public sealed partial class MainForm : Form
         sessionTimer.Tick += (_, _) => PersistSession();
         diskTimer.Tick += (_, _) => CheckExternalChanges();
 
+        SetApplicationFontSize(applicationFontPoints, false);
+        SetEditorFontSize(editorFontPoints, false);
         RestoreSession();
         foreach (string path in args.Where(File.Exists)) OpenPath(path);
         if (!documents.Any(x => !x.Closed)) NewDocument();
@@ -183,7 +186,7 @@ public sealed partial class MainForm : Form
 
     private MenuStrip BuildMenu()
     {
-        var menu = new MenuStrip { Font = new Font("Segoe UI", 9f) };
+        var menu = new MenuStrip { Font = new Font("Segoe UI", DefaultFontPoints, FontStyle.Regular, GraphicsUnit.Point) };
         var file = new ToolStripMenuItem("&File");
         AddMenu(file, "&New", Keys.Control | Keys.N, NewDocument);
         AddMenu(file, "&Open...", Keys.Control | Keys.O, OpenFilesFromDialog);
@@ -256,6 +259,17 @@ public sealed partial class MainForm : Form
         var indent = new ToolStripMenuItem("Auto Indent") { Checked = true, CheckOnClick = true };
         indent.CheckedChanged += (_, _) => autoIndent = indent.Checked;
         view.DropDownItems.Add(indent);
+        view.DropDownItems.Add(new ToolStripSeparator());
+        applicationFontMenu = new ToolStripMenuItem("Application Font (12 pt)");
+        AddMenu(applicationFontMenu, "Increase Application Font (+1 pt)", Keys.None, () => SetApplicationFontSize(applicationFontPoints + 1));
+        AddMenu(applicationFontMenu, "Decrease Application Font (-1 pt)", Keys.None, () => SetApplicationFontSize(applicationFontPoints - 1));
+        AddMenu(applicationFontMenu, "Reset Application Font (12 pt)", Keys.None, () => SetApplicationFontSize(DefaultFontPoints));
+        view.DropDownItems.Add(applicationFontMenu);
+        editorFontMenu = new ToolStripMenuItem("RTF Editor Font (12 pt)");
+        AddMenu(editorFontMenu, "Increase Editor Font (+1 pt)", Keys.None, () => SetEditorFontSize(editorFontPoints + 1));
+        AddMenu(editorFontMenu, "Decrease Editor Font (-1 pt)", Keys.None, () => SetEditorFontSize(editorFontPoints - 1));
+        AddMenu(editorFontMenu, "Reset Editor Font (12 pt)", Keys.None, () => SetEditorFontSize(DefaultFontPoints));
+        view.DropDownItems.Add(editorFontMenu);
         view.DropDownItems.Add(new ToolStripSeparator());
         AddMenu(view, "Zoom In", Keys.Control | Keys.Oemplus, () => ChangeZoom(0.10f));
         AddMenu(view, "Zoom Out", Keys.Control | Keys.OemMinus, () => ChangeZoom(-0.10f));
@@ -379,6 +393,7 @@ public sealed partial class MainForm : Form
                 DocumentFilePath = d.Path ?? d.Name, ShowLineNumbers = showLineNumbers, Bookmarks = d.Bookmarks
             };
             control.Editor.WordWrap = d.WordWrap;
+            control.SetBaseFontSize(editorFontPoints);
             control.Editor.ZoomFactor = Math.Clamp(d.Zoom, 0.5f, 4f);
             ignoreTextChanged = true;
             control.LoadText(d.Buffer, d.Path ?? d.Name);
@@ -551,7 +566,7 @@ public sealed partial class MainForm : Form
     }
     private void ShowDocumentContext(Control source, Point point, EditorDocument d)
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip { Font = Font };
         menu.Items.Add("Open / Activate", null, (_, _) => Activate(d));
         if (!d.Closed)
         {
@@ -603,14 +618,23 @@ public sealed partial class MainForm : Form
         e.Graphics.FillRectangle(bg, rect);
         using var line = new Pen(Color.FromArgb(202, 208, 216));
         e.Graphics.DrawRectangle(line, rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
-        var textRect = new Rectangle(rect.Left + 9, rect.Top + 2, Math.Max(0, rect.Width - 32), rect.Height - 4);
+        var closeRect = GetEditorTabCloseRect(rect);
+        var textRect = new Rectangle(rect.Left + 9, rect.Top + 2,
+            Math.Max(0, closeRect.Left - rect.Left - 14), rect.Height - 4);
         TextRenderer.DrawText(e.Graphics, editors.TabPages[e.Index].Text,
             editors.Font, textRect, Color.FromArgb(40, 44, 50),
             TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-        var xrect = new Rectangle(rect.Right - 22, rect.Top + 2, 17, rect.Height - 4);
-        TextRenderer.DrawText(e.Graphics, "×", editors.Font, xrect, Color.FromArgb(92, 96, 107),
+        TextRenderer.DrawText(e.Graphics, "×", editors.Font, closeRect, Color.FromArgb(92, 96, 107),
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
     }
+    private Rectangle GetEditorTabCloseRect(Rectangle tabRect)
+    {
+        int closeSize = Math.Max(18, editors.Font.Height);
+        int rightPadding = Math.Max(5, editors.Font.Height / 5);
+        return new Rectangle(tabRect.Right - closeSize - rightPadding,
+            tabRect.Top + 2, closeSize, Math.Max(0, tabRect.Height - 4));
+    }
+
     private void EditorTabMouseDown(object? sender, MouseEventArgs e)
     {
         for (int i = 0; i < editors.TabCount; i++)
@@ -620,14 +644,14 @@ public sealed partial class MainForm : Form
             var page = editors.TabPages[i];
             if (page.Tag is EmbeddedShellControl)
             {
-                if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && e.X >= r.Right - 25))
+                if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && GetEditorTabCloseRect(r).Contains(e.Location)))
                     CloseShellTab(page);
                 else if (e.Button == MouseButtons.Right)
                     ShowShellContext(e.Location, page);
                 return;
             }
             if (page.Tag is not EditorDocument doc) return;
-            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && e.X >= r.Right - 25))
+            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && GetEditorTabCloseRect(r).Contains(e.Location)))
                 CloseDocument(doc);
             else if (e.Button == MouseButtons.Right)
                 ShowDocumentContext(editors, e.Location, doc);
@@ -667,6 +691,7 @@ public sealed partial class MainForm : Form
         if (searchWindow == null || searchWindow.IsDisposed)
         {
             searchWindow = new SearchDialog(() => CurrentDocument()?.View?.Editor);
+            searchWindow.SetInterfaceFont(Font);
             searchWindow.FormClosed += (_, _) => searchWindow = null;
         }
         searchWindow.Show(this);
@@ -684,6 +709,7 @@ public sealed partial class MainForm : Form
                 int idx = editor.GetFirstCharIndexFromLine(Math.Clamp(line - 1, 0, Math.Max(0, editor.Lines.Length - 1)));
                 if (idx >= 0) { editor.Select(idx, 0); editor.ScrollToCaret(); editor.Focus(); }
             });
+        dialog.SetInterfaceFont(Font);
         dialog.Show(this);
     }
     private void ChangeZoom(float delta)

@@ -25,6 +25,7 @@ internal sealed class FindInFilesDialog : Form
     private readonly Button start = new() { Text = "Search", Width = 92 };
     private readonly Button stop = new() { Text = "Cancel", Width = 92, Enabled = false };
     private CancellationTokenSource? cancellation;
+    private TableLayoutPanel? fontLayout;
 
     public FindInFilesDialog(string initialDirectory, Action<string, int> onResult)
     {
@@ -32,7 +33,10 @@ internal sealed class FindInFilesDialog : Form
         Text = "Find in Files"; Width = 1060; Height = 650;
         MinimumSize = new Size(650, 430); StartPosition = FormStartPosition.CenterParent;
         directory.Text = initialDirectory;
+        Font = new Font("Segoe UI", 12f);
+        AutoScaleMode = AutoScaleMode.Font;
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(9) };
+        fontLayout = panel;
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         foreach (int height in new[] { 29, 29, 29, 35, 37 })
@@ -73,6 +77,20 @@ internal sealed class FindInFilesDialog : Form
         panel.Controls.Add(results, 0, 5); panel.SetColumnSpan(results, 2);
         Controls.Add(panel);
         FormClosing += (_, _) => cancellation?.Cancel();
+    }
+
+    public void SetInterfaceFont(Font uiFont)
+    {
+        Font = uiFont;
+        if (fontLayout != null)
+        {
+            fontLayout.ColumnStyles[0].Width = Math.Max(98, uiFont.Height * 5);
+            int row = Math.Max(29, uiFont.Height + 11);
+            for (int i = 0; i < 3; i++) fontLayout.RowStyles[i].Height = row;
+            fontLayout.RowStyles[3].Height = Math.Max(35, uiFont.Height + 13);
+            fontLayout.RowStyles[4].Height = Math.Max(37, uiFont.Height + 15);
+            fontLayout.PerformLayout();
+        }
     }
 
     private sealed record FileHit(string Path, int Line, string Preview);

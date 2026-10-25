@@ -28,6 +28,8 @@ public sealed partial class MainForm
                 ExplorerRoot = explorerRoot,
                 NavigationIndex = navigation.SelectedIndex,
                 LeftWidth = split.Panel1Collapsed ? 216 : split.SplitterDistance,
+                ApplicationFontPoints = applicationFontPoints,
+                EditorFontPoints = editorFontPoints,
                 RecentFiles = recentFiles.ToList()
             };
             Directory.CreateDirectory(Path.GetDirectoryName(sessionPath)!);
@@ -58,6 +60,9 @@ public sealed partial class MainForm
             if (state == null) return;
             // Do not restore the old explorer path: every launch starts in Documents.
             preferredLeftWidth = Math.Clamp(state.LeftWidth, 160, 320);
+            // Restore font sizes BEFORE constructing recovered editor views.
+            SetApplicationFontSize(state.ApplicationFontPoints, false);
+            SetEditorFontSize(state.EditorFontPoints, false);
             foreach (var recent in state.RecentFiles ?? new List<string>())
                 if (File.Exists(recent)) recentFiles.Add(recent);
             RefreshRecentMenu();

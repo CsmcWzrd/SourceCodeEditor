@@ -1,4 +1,4 @@
-# SourceCodeEditor 0.4.0 — Windows x64 smoke-test checklist
+# SourceCodeEditor 0.4.1 — Windows x64 smoke-test checklist
 
 **Not yet executed** in a Windows test environment. These checks are intended
 for Visual Studio 2022 / Windows 10 or Windows 11 x64.
@@ -52,3 +52,21 @@ for Visual Studio 2022 / Windows 10 or Windows 11 x64.
 16. Build `Release | x64` in the **single** `SourceCodeEditor.sln` and run
     `build-x64.cmd` with Inno Setup installed. Check generated installer and
     clean install/uninstall on Windows x64.
+
+## Application/RTF editor font sizing (0.4.1)
+
+17. On a fresh installation (or session with no saved font settings), verify
+    the File Explorer tree/address and source editor use 12 pt fonts.
+18. Choose **View > Application Font > Increase Application Font** three times.
+    Verify the menu, navigation tabs, file lists, status bar, editor tab headers
+    and CMD shell UI grow without clipping; restore to 12 pt.
+19. Choose **View > RTF Editor Font > Increase Editor Font**. Verify all existing
+    source tabs change together, the line-number gutter stays aligned, and syntax
+    highlight colors remain unchanged. Decrease, then reset to 12 pt.
+20. Ctrl+mouse-wheel zooms one document independently of its base font size;
+    switching documents must not change the base font. With a large font,
+    close a tab using × and make sure text in the tab header remains clickable.
+21. Save an unsaved document, adjust both font sizes, close and restart.
+    Verify restored application/editor font sizes and 12 pt reset commands.
+22. Open Find and Replace/Find in Files dialogs; verify application font scaling
+    while dialog controls remain usable. Verify no resize or startup exception.

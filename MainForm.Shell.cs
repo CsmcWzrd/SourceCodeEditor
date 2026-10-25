@@ -64,6 +64,7 @@ public sealed partial class MainForm
                 Padding = Padding.Empty, ToolTipText = "cmd.exe in " + folder
             };
             var shell = new EmbeddedShellControl(folder);
+            shell.ApplyInterfaceFont(applicationFontPoints);
             tab.Tag = shell;
             tab.Controls.Add(shell);
             editors.TabPages.Add(tab);
@@ -94,7 +95,7 @@ public sealed partial class MainForm
 
     private void ShowShellContext(Point point, TabPage tab)
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip { Font = Font };
         menu.Items.Add("Close shell tab", null, (_, _) => CloseShellTab(tab));
         menu.Closed += (_, _) => menu.Dispose();
         menu.Show(editors, point);
